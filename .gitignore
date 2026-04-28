@@ -1,0 +1,22 @@
+# Cabal / GHC build artifacts
+dist-newstyle/
+dist/
+*.hi
+*.hie
+*.o
+*.dyn_hi
+*.dyn_o
+
+# HLS / tooling
+.hie-bios/
+.ghc.environment.*
+
+# Stack (if used occasionally)
+.stack-work/
+
+# Cabal local config overrides
+cabal.project.local
+cabal.project.local~
+
+# Editor settings
+.vscode/

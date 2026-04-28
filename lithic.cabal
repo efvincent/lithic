@@ -1,0 +1,50 @@
+cabal-version:      3.4
+name:               lithic
+version:            0.1.0.0
+build-type:         Simple
+license:            NONE
+author:             Eric Vincent (arch)
+maintainer:         eric@efvincent.com
+extra-doc-files:    CHANGELOG.md
+
+common shared
+    ghc-options: -Wall 
+                 -Wcompat 
+    build-depends:
+        base >= 4.19 && < 5,
+        bluefin,
+        vector,
+        text,
+        microlens,
+        generic-lens
+    default-extensions:
+        BlockArguments
+        LambdaCase
+        OverloadedStrings
+        OverloadedRecordDot
+        DataKinds
+        DuplicateRecordFields
+        OverloadedLabels
+
+library
+    import:           shared
+    exposed-modules:  Compiler.AST
+                    , Compiler.Lexer
+                    , Compiler.Parser
+                    , Compiler.REPL
+    build-depends:    base >= 4.19 && < 5
+                    , bluefin
+                    , generic-lens
+                    , microlens
+                    , text
+    hs-source-dirs:   src
+    default-language: GHC2024
+
+executable lithic-cli
+    import:           shared
+    main-is:          Main.hs
+    build-depends:    base
+                    , lithic
+                    , text
+    hs-source-dirs:   app
+    default-language: GHC2024
