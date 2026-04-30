@@ -88,6 +88,10 @@ check env ex expr expectedTy =
     (Lam _ x Nothing body, TArrow _ paramTy retTy) -> do
       local env (extendEnv x paramTy) (check env ex body retTy)
 
+    -- Catch invalid checking contexts for unannotated lambdas before falling back
+    (Lam sp _ Nothing _, _) ->
+      throw ex $ MkTypeError "Type mismatch: Expected a non-function type, but got a lambda." sp
+      
     -- Fallback: Synthesize the type and verify subsumption/unification
     _ -> do
       inferredTy <- infer env ex expr
