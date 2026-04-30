@@ -34,6 +34,7 @@ library
     exposed-modules:  Compiler.AST
                     , Compiler.Lexer
                     , Compiler.Parser
+                    , Compiler.TypeChecker
                     , Compiler.REPL
                     , Compiler.TUI
     build-depends:    base >= 4.19 && < 5
