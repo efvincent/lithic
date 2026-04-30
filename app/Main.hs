@@ -22,14 +22,3 @@ main = do
 
   -- 2. Take over the main thread with the Brick UI
   runTUI eventChan inputMVar
-
-
--- module Main where
-
--- import Bluefin.Eff (runEff)
--- import Compiler.REPL (replLoop, runTerminalIO)
-
--- main :: IO ()
--- main = runEff \io -> do
---   let term = runTerminalIO io
---   replLoop term

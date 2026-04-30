@@ -1,6 +1,6 @@
 module Compiler.Lexer where
 
-import Data.Char (isSpace, isAlpha, isAlphaNum)
+import Data.Char (isSpace, isAlpha, isAlphaNum, isUpper, isDigit)
 import Data.Function ((&))
 import Data.Text (Text)
 import Lens.Micro ((.~))
@@ -14,14 +14,20 @@ import Bluefin.Exception (Exception, throw, try)
 
 -- | The fundamental categories of syntax in Lithic
 data TokenClass
-  = TokIdent Text -- ^ Variables names (e.g., "x", "myFunc")
-  | TokLet        -- ^ The `let` keyword
-  | TokIn         -- ^ The `in` keyword
-  | TokLam        -- ^ The `\` or `fn` keyword for lambdas
-  | TokArrow      -- ^ The `->` operator
-  | TokAssign     -- ^ The `=` operator
+  = TokIdent Text   -- ^ Lowercase idents (term variables, type variables)
+  | TokUIdent Text  -- ^ Uppercase idents (concrete types)
+  | TokInt Int      -- ^ Integer Literals
+  | TokColon        -- ^ The colon operator
+  | TokLet          -- ^ The `let` keyword
+  | TokIn           -- ^ The `in` keyword
+  | TokLam          -- ^ The `\` or `fn` keyword for lambdas
+  | TokArrow        -- ^ The `->` operator
+  | TokFatArrow     -- ^ The `=>` operator for lambdas
+  | TokAssign       -- ^ The `=` operator
   | TokLParen 
   | TokRParen
+  | TokForall       -- ^ `forall` operator
+  | TokDot          -- ^ `.` operator
   | TokEOF
   deriving (Show, Eq, Generic)
 
@@ -66,10 +72,21 @@ scanTokens st ex = loop []
         mc <- advance st
         case mc of 
           -- Single character operators
+          Just ':'  -> emit TokColon startSt acc
           Just '\\' -> emit TokLam startSt acc
-          Just '='  -> emit TokAssign startSt acc
           Just '('  -> emit TokLParen startSt acc
           Just ')'  -> emit TokRParen startSt acc
+          Just '.'  -> emit TokDot startSt acc
+          Just '∀'  -> emit TokForall startSt acc
+
+          -- Two character `=>` requires a lookahead, with fallback to `=`
+          Just '=' -> do
+            next <- peek st
+            case next of
+              Just '>' -> do
+                _ <- advance st
+                emit TokFatArrow startSt acc
+              _ -> emit TokAssign startSt acc
 
           -- Two character operator `->` requires a lookahead
           Just '-' -> do
@@ -83,15 +100,25 @@ scanTokens st ex = loop []
           -- Identifiers and keywords
           Just c | isAlpha c -> do
             -- We already consumed `c`, so we grab the rest
-            rest <- consumeWhile isAlphaNum st
+            rest <- consumeWhile (\x -> isAlphaNum x || x == '_' || x == '\'') st
             let ident = T.singleton c <> rest
 
             -- Keyword routing
             case ident of
-              "let" -> emit TokLet startSt acc
-              "in"  -> emit TokIn startSt acc
-              "fn"  -> emit TokLam startSt acc    -- 'fn' as an alternative to '\'
-              _     -> emit (TokIdent ident) startSt acc
+              "let"    -> emit TokLet startSt acc
+              "in"     -> emit TokIn startSt acc
+              "fn"     -> emit TokLam startSt acc    -- 'fn' as an alternative to '\'
+              "forall" -> emit TokForall startSt acc
+              _ | isUpper c -> emit (TokUIdent ident) startSt acc
+              _             -> emit (TokIdent ident) startSt acc
+
+          -- Numeric literals
+          Just c | isDigit c -> do
+            rest <- consumeWhile isDigit st
+            let numStr = T.singleton c <> rest
+            -- read is safe here beacuse consumeWhile guarantees only digits
+            let val = read (T.unpack numStr) :: Int
+            emit (TokInt val) startSt acc
 
           -- Fallback for unhandled characters
           Just c -> throw ex (MkLexError ("Unexpected character: " <> T.singleton c) startSt.line startSt.col)

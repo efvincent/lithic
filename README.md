@@ -13,7 +13,7 @@ cabal run lithic-cli
 
 In the REPL:
 
-- Enter an expression such as `x`, `f x`, `fn x -> x`, or `let id = fn x -> x in id y`.
+- Enter an expression such as `x`, `f x`, `fn x => x`, or `let id = fn x => x in id y`.
 - Successful input is rendered as `[AST]...` in the scrollback pane.
 - Lexing or parsing failures are shown inline in the same pane.
 - Press Enter to submit the current editor contents.

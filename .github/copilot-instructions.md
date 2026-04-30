@@ -18,10 +18,16 @@ Keep phases highly decoupled and preserve clear subsystem boundaries.
    - Track precise source locations with `SourceSpan` on all tokens for diagnostics and future LSP-facing workflows.
    - Keep the lexer pure at the public entry point (`runLexer`).
 
-2. Parsing (Pratt Parser):
-   - Use top-down operator precedence with explicit NUD/LED structure.
-   - Treat juxtaposition (for example `f x`) as implicit application.
-   - Keep the parser pure at the public entry point (`runParser`).
+2. Parsing (Pratt Parser) — **COMPLETED**:
+   - Top-down operator precedence (Pratt) with explicit NUD/LED (null/left denotation) structure.
+   - Precedence model: `PrecLowest` (0), `PrecAnn` (5), `PrecApp` (30).
+   - Juxtaposition is implicit application (e.g., `f x` parses as `App f x`).
+   - Let-binding RHS parses with `PrecLowest` to capture full expressions including type annotations.
+   - Lambda bodies parse with `PrecLowest` to allow all valid term-level constructs.
+   - Type annotations in expression position via `:` operator (e.g., `x : Int`, `\p : a -> b => p`).
+   - Application is right-associative at LED; parser uses pushback pattern to avoid left-recursion.
+   - Pure entry point: `runParser :: [Token] -> Either ParseError Expr`.
+   - Parser is frontend-agnostic; does not perform type checking, elaboration, or evaluation.
 
 3. Type System (Bidirectional Type Checking):
    - Do not default to Hindley-Milner assumptions.
@@ -33,6 +39,13 @@ Keep phases highly decoupled and preserve clear subsystem boundaries.
    - Preserve separation between frontend-agnostic REPL logic (`Compiler.REPL`) and Brick UI code (`Compiler.TUI`).
    - Keep the `Terminal es` abstraction in place; do not leak Brick-specific behavior into compiler stages.
    - Maintain thread-safe handoff patterns (`BChan` events and non-blocking `MVar` submission patterns) and avoid event-loop blocking.
+
+5. Macro System and Extensible Notation (Future Architecture):
+   - The compiler will eventually support hygienic macros and Coq/Lean-style extensible notation.
+   - To support this, strictly enforce the separation of Surface Syntax from Core Syntax.
+   - The `Expr` AST emitted by the Parser is a `SurfaceExpr`. It remains pure data and must never contain evaluation or type-checking logic.
+   - An Elaboration phase (`Compiler.Elaborator`) will eventually sit between parsing and evaluation. It will expand macros, resolve custom notation, and desugar the `SurfaceExpr` into a restricted `CoreExpr` calculus. 
+   - Interleave or tightly couple Bidirectional Type Checking with the Elaboration phase, allowing macro expansion to utilize type information.
 
 ## Technology Stack and Haskell Conventions
 
@@ -60,6 +73,26 @@ Keep phases highly decoupled and preserve clear subsystem boundaries.
 - Assume Linux-first environments for operational guidance.
 - Prefer dense, rigorous, performance-aware, thread-safe recommendations over beginner-focused explanations.
 
+## Grammar and Syntax Decisions (Strictly Enforced)
+
+### Term-Level Syntax
+- **Lambdas:** `\x => body` or `fn x => body` (fat arrow `=>` is the delimiter, never thin arrow `->`)
+- **Type-annotated lambdas:** `\x : T => body` (inline annotation without parens, unambiguous)
+- **Let-bindings:** `let x = e1 in e2` where e1 may include annotations: `let x = e : T in e2`
+- **Implicit application:** Juxtaposition binds tightly (precedence 30): `f x y` parses as `(f x) y`
+- **Type annotations:** `expr : Type` (precedence 5, lower than application)
+- **Data constructors:** Uppercase identifiers in term position (e.g., `True`, `Just x`, `Left y`) are reserved for future ADT support; currently parse as variables
+
+### Type-Level Syntax
+- **Function types:** `a -> b` (thin arrow, right-associative)
+- **Universal quantification:** `forall a b. a -> b`
+- **Type variables:** Lowercase identifiers (e.g., `a`, `t`)
+- **Concrete types:** Uppercase identifiers (e.g., `Int`) or lowercase (e.g., `a` as type variable)
+
+### Constraint and Context Syntax (Reserved for Future)
+- **Type class constraints:** Will use `=>` in type signatures (e.g., `Eq a => a -> a`) when typechecker is implemented
+- **This is consistent with term-level `=>` because contexts are type-level constructs**
+
 ## Error Handling and Diagnostics Strategy
 
 - Compilers should not fail on first error when avoidable.
@@ -68,11 +101,15 @@ Keep phases highly decoupled and preserve clear subsystem boundaries.
 
 ## Current REPL Behavior (As Implemented)
 
-- Prompt for input.
-- Exit on `:quit` or frontend shutdown.
-- Run lexer, then parser.
-- Print `Lex Error: ...`, `Parse Error: ...`, or `[AST]...` output.
-- When REPL behavior changes, update user-facing docs in the same task.
+- Prompt for input with `lithic> `.
+- Exit on `:quit` or frontend shutdown (Ctrl-C).
+- Run lexer, then parser, in sequence.
+- Output on success: `[AST]<show ast>` (parsed expression AST).
+- Output on lexer failure: `Lex Error: <msg>` (precise source span included in structured error).
+- Output on parser failure: `Parse Error: <msg>` (precise source span included in structured error).
+- Scrollback viewport shows all historical output and input echoes.
+- Input editor is persistent across REPL iterations; cleared on Enter submission.
+- When REPL behavior changes, update user-facing docs and README in the same task.
 
 ## Build and Validation
 
@@ -82,9 +119,10 @@ Keep phases highly decoupled and preserve clear subsystem boundaries.
 
 ## Documentation Expectations
 
-- Keep `README.md` aligned with actual executable behavior.
+- Keep `README.md` aligned with actual executable behavior. Include example REPL sessions that reflect current syntax.
 - Keep `docs/` content aligned with implementation details when architecture or behavior changes.
 - Update docs whenever commands, controls, output formats, or workflow expectations change.
+- When preparing a branch for PR: update version number in `lithic.cabal`, add detailed entry to `CHANGELOG.md` with all phase deliverables, and ensure `copilot-instructions.md` reflects current architecture and grammar decisions.
 
 ## What to Avoid
 
