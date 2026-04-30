@@ -16,7 +16,10 @@ common shared
         vector,
         text,
         microlens,
-        generic-lens
+        generic-lens,
+        brick,
+        vty,
+        vty-crossplatform
     default-extensions:
         BlockArguments
         LambdaCase
@@ -32,6 +35,7 @@ library
                     , Compiler.Lexer
                     , Compiler.Parser
                     , Compiler.REPL
+                    , Compiler.TUI
     build-depends:    base >= 4.19 && < 5
                     , bluefin
                     , generic-lens
@@ -48,3 +52,4 @@ executable lithic-cli
                     , text
     hs-source-dirs:   app
     default-language: GHC2024
+    ghc-options:      -threaded

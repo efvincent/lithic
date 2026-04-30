@@ -1,0 +1,6 @@
+packages: .
+
+-- Force cabal to ignore the upper bounds on 'config-ini' dependencies
+allow-newer: config-ini:containers
+           , config-ini:base
+           , config-ini:text

@@ -1,6 +1,6 @@
 module Compiler.Lexer where
 
-import Data.Char (isSpace)
+import Data.Char (isSpace, isAlpha, isAlphaNum)
 import Data.Function ((&))
 import Data.Text (Text)
 import Lens.Micro ((.~))
@@ -36,7 +36,7 @@ data LexError = MkLexError
   { msg :: Text
   , line :: Int
   , col :: Int
-  } deriving (Show, Eq)
+  } deriving (Show, Eq, Generic)
 
 -- | The internal state of our scanner
 data ScannerState = MkScannerState
@@ -80,6 +80,19 @@ scanTokens st ex = loop []
                 emit TokArrow startSt acc
               _ -> throw ex (MkLexError ("Unexpected character '-'. Did you mean '->'?") startSt.line startSt.col)
           
+          -- Identifiers and keywords
+          Just c | isAlpha c -> do
+            -- We already consumed `c`, so we grab the rest
+            rest <- consumeWhile isAlphaNum st
+            let ident = T.singleton c <> rest
+
+            -- Keyword routing
+            case ident of
+              "let" -> emit TokLet startSt acc
+              "in"  -> emit TokIn startSt acc
+              "fn"  -> emit TokLam startSt acc    -- 'fn' as an alternative to '\'
+              _     -> emit (TokIdent ident) startSt acc
+
           -- Fallback for unhandled characters
           Just c -> throw ex (MkLexError ("Unexpected character: " <> T.singleton c) startSt.line startSt.col)
           Nothing -> loop acc
@@ -120,6 +133,18 @@ skipWhitespace st = do
       _ <- advance st
       skipWhitespace st
     _ -> pure ()
+
+-- | Consumes characters as long as they match the given predicate
+consumeWhile :: forall st es. (st :> es) => (Char -> Bool) -> State ScannerState st -> Eff es Text
+consumeWhile predicate st = T.pack . reverse <$> loop []
+  where
+    loop acc = do
+      mc <- peek st
+      case mc of 
+        Just c | predicate c -> do
+          _ <- advance st
+          loop (c : acc)
+        _ -> pure acc
 
 -- | The pure entry point for the lexter.
 -- This completely encapsulates the Bluefin effectrs so the rest of the compiler
