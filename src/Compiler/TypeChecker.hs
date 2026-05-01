@@ -9,10 +9,10 @@ import qualified Data.Text as T
 
 import Bluefin.Eff ((:>), Eff)
 import Bluefin.Exception (Exception, throw)
-import Bluefin.Reader (Reader, ask, local)
+import Bluefin.Reader (Reader, ask, runReader)
 import Bluefin.State (State, get, modify)
 
-import Compiler.AST (Expr(..), Type(..), SourceSpan)
+import Compiler.AST (Expr(..), Type(..), SourceSpan, getTypeSpan)
 import Lens.Micro ((.~), (%~))
 import Data.Function ((&))
 
@@ -83,53 +83,122 @@ infer st env ex expr =
         Just ty -> pure ty
         Nothing -> throw ex $ MkTypeError ("Unbound variable: " <> x) sp
 
-    Ann _ e ty -> do
-      check st env ex e ty
-      pure ty
-
-    App _ f x -> do
-      -- Synthesize the function's type
-      fTy <- infer st env ex f
-      case fTy of
-        TArrow _ paramTy retTy -> do
-          -- Push the known parameter type down to the argument
-          check st env ex x paramTy
-          pure retTy
-        _ -> throw ex $ MkTypeError "Expected a function in application" (getSpan f)
-    
-    Lam sp x mTy body ->
-      case mTy of
-        Just paramTy -> do
-          -- With an explicit annotation, we can synthesize the lambda type
-          bodyTy <- local env (extendEnv x paramTy) (infer st env ex body)
-          pure $ TArrow sp paramTy bodyTy
-        Nothing ->
-          throw ex $ MkTypeError "Cannot infer type of unannotated lambda. Add an annotation or use it in a checking context." sp
-
-    Let _ x val body -> do
-      -- Koka-style FBIP relies on explicit let-bindings.
-      -- We strictly synthesize the bound value first.
-      valTy <- infer st env ex val
-      local env (extendEnv x valTy) (infer st env ex body)
-
--- | Verify that an expression satisfies a given type (Checking phase).
-check 
-  :: forall st r ex es. (st :> es, r :> es, ex :> es)
-  => State TCState st -> Reader Env r -> Exception TypeError ex -> Expr -> Type -> Eff es ()
-check st env ex expr expectedTy = 
-  case (expr, expectedTy) of
-    -- Unannotated lambdas can be checked against known function types
-    (Lam _ x Nothing body, TArrow _ paramTy retTy) -> do
-      local env (extendEnv x paramTy) (check st env ex body retTy)
-
-    -- Catch invalid checking contexts for unannotated lambdas before falling back
-    (Lam sp _ Nothing _, _) ->
-      throw ex $ MkTypeError "Type mismatch: Expected a non-function type, but got a lambda." sp
+    -- 3. Lambdas (Both Annotated and Unannotated)
+    Lam sp param mAnn body -> do
+      -- Determine the parameter type: use annotation if present, otherwise guess via TMeta
+      paramTy <- case mAnn of
+        Just ty -> pure ty
+        Nothing -> freshMeta sp st
       
-    -- Fallback: Synthesize the type and verify subsumption/unification
+      -- Create the new extended environment value
+      currentEnv <- ask env
+      let newEnv = MkEnv ((param, paramTy) : currentEnv.bindings)
+      
+      -- Run a strictly scoped local Reader effect for the body
+      bodyTy <- runReader newEnv \newEnvHandle ->
+        infer st newEnvHandle ex body
+        
+      pure $ TArrow sp paramTy bodyTy
+
+    -- 4. Function Application
+    App sp f arg -> do
+      -- Infer the function and deeply resolve it to clear any substitutions
+      rawTyF <- infer st env ex f
+      tyF <- force st rawTyF 
+      
+      case tyF of
+        -- Standard case: it is already known to be a function
+        TArrow _ domain range -> do
+          check st env ex arg domain
+          pure range
+          
+        -- Unification case: the function is currently an unknown meta-variable
+        TMeta _ mId -> do
+          -- Guess the domain and range
+          domain <- freshMeta sp st
+          range <- freshMeta sp st
+          
+          -- Constrain the unknown function to be an arrow type
+          bindMeta st ex mId (TArrow sp domain range) sp
+          
+          -- Check the argument against our guessed domain
+          check st env ex arg domain
+          pure range
+
+        -- Failure case
+        _ -> throw ex $ MkTypeError "Attempted to apply a non-function" sp
+
+    -- 5. Explicit Type Annotations (The bridge to checking)
+    Ann _ e expectedTy -> do
+      -- We know the expected type, so we push it down into the checking phase
+      check st env ex e expectedTy
+      pure expectedTy
+
+    -- 6. Let Bindings
+    Let _ name val body -> do
+      -- 1. Infer the type of the value being bound
+      valTy <- infer st env ex val
+      
+      -- 2. Extend the environment
+      e <- ask env
+      let newEnv = MkEnv ((name, valTy) : e.bindings)
+      
+      -- 3. Infer the body in the strictly scoped new environment
+      runReader newEnv \newEnvHandle ->
+        infer st newEnvHandle ex body
+
+-- | Check that an expression satisfies an expected type.
+check 
+  :: forall st env ex es. (st :> es, env :> es, ex :> es) 
+  => State TCState st 
+  -> Reader Env env 
+  -> Exception TypeError ex 
+  -> Expr 
+  -> Type 
+  -> Eff es ()
+check st envHandle ex expr expectedTy = do
+  -- 1. ALWAYS force the expected type to look through any substitutions
+  forcedTy <- force st expectedTy
+  
+  case (expr, forcedTy) of
+    -- 2. Checking a Lambda against a known Arrow Type
+    (Lam _ param mAnn body, TArrow _ domain range) -> do
+      -- 1. Enforce the annotation against the expected domain if present
+      case mAnn of
+        -- FIX: Use the specific span of the annotation for precise error reporting
+        Just annTy -> unify st ex annTy domain (getTypeSpan annTy)
+        Nothing -> pure ()
+        
+      env <- ask envHandle
+      let newEnv = MkEnv ((param, domain) : env.bindings)
+      runReader newEnv \newEnvHandle ->
+        check st newEnvHandle ex body range
+        
+    -- 3. Checking a Lambda against an unbound Meta-variable
+    (Lam sp param mAnn body, TMeta _ mId) -> do
+      -- 1. If annotated, use the annotation as the domain. Otherwise, guess.
+      domain <- case mAnn of
+        Just annTy -> pure annTy
+        Nothing -> freshMeta sp st
+        
+      range <- freshMeta sp st
+      
+      -- Constrain the meta-variable to the arrow type
+      bindMeta st ex mId (TArrow sp domain range) sp
+      
+      env <- ask envHandle
+      let newEnv = MkEnv ((param, domain) : env.bindings)
+      runReader newEnv \newEnvHandle ->
+        check st newEnvHandle ex body range
+
+    -- 4. Checking a Lambda against anything else is a hard error
+    (Lam sp _ _ _, _) -> 
+      throw ex $ MkTypeError "Type mismatch: Expected a non-function type, but got a lambda." sp
+
+    -- 5. The Bridge: If no specific checking rules match, fall back to Synthesis + Unification
     _ -> do
-      inferredTy <- infer st env ex expr
-      subsumes st ex inferredTy expectedTy (getSpan expr)
+      inferredTy <- infer st envHandle ex expr
+      unify st ex inferredTy forcedTy (getSpan expr)
 
 -- | Verify that the inferred type subsumes the expected type.
 subsumes

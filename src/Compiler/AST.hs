@@ -48,3 +48,21 @@ data Expr
   -- ^ Explicit type annotation: expr : Type
   deriving (Show, Eq, Generic)
 
+-- | Extract the source span from a Type node
+getTypeSpan :: Type -> SourceSpan
+getTypeSpan = \case
+  TVar sp _ -> sp
+  TInt sp -> sp
+  TArrow sp _ _ -> sp
+  TForall sp _ _ -> sp
+  TMeta sp _ -> sp
+
+-- | Extracts the source span from any AST node
+getSpan :: Expr -> SourceSpan
+getSpan = \case
+  Var sp _     -> sp
+  Lit sp _     -> sp
+  Lam sp _ _ _ -> sp
+  App sp _ _   -> sp
+  Let sp _ _ _ -> sp
+  Ann sp _ _   -> sp

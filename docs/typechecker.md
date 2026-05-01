@@ -7,15 +7,15 @@ Lithic uses a bidirectional type system, augmented with a stateful unification e
 The typechecker is split into two mutually recursive phases: **Synthesis** (`infer`) and **Checking** (`check`). 
 
 ### 1. Synthesis (`infer`)
-*Bottom-up propagation.* The `infer` function takes an expression and attempts to deduce its type strictly from its sub-expressions. 
-* Use case: Literals, variables, annotated bindings, and function applications.
-* Example: For `f x`, the compiler infers the type of `f` (which must be an arrow type `a -> b`), checks `x` against `a`, and synthesizes `b` as the result.
+*Bottom-up propagation.* The `infer` function takes an expression and attempts to deduce its type strictly from its sub-expressions.
+* Use case: literals, variables, lambdas (annotated and unannotated), annotated bindings, and function applications.
+* Example: for `f x`, if `f` is currently unknown (`TMeta`), the checker allocates fresh meta-variables for domain/range, constrains `f` to an arrow type, then checks `x` against the inferred domain.
 
 ### 2. Checking (`check`)
 *Top-down propagation.*
-The `check` function takes an expression and an *expected* type, pushing known type information down into the AST.
-* Use case: Unannotated lambdas and explicitly typed `let` bindings.
-* Example: If checking `\x => x` against `Int -> Int`, the compiler binds `x` to `Int` in the environment and checks the body `x` against the expected return type `Int`.
+The `check` function takes an expression and an *expected* type, pushes known type information down into the AST, and first `force`s that expected type through substitutions.
+* Use case: lambdas checked against known arrow types, lambdas checked against unresolved metas, and synthesis+unification fallback for all other terms.
+* Example: if checking `\x => x` against an unresolved `TMeta m`, the checker allocates fresh domain/range metas, binds `m` to `domain -> range`, then checks the body against `range`.
 
 ## The Bridge: `subsumes` and `unify`
 
@@ -49,4 +49,4 @@ You should use these operations for different purposes:
 
 ## Current Scope
 
-This branch adds the stateful substitution infrastructure, persistent REPL-level `TCState`, and corrected deep resolution for displayed types. It does not yet broaden the set of programs that infer successfully by itself because fresh meta-variable generation is not yet threaded through additional inference rules.
+This branch now includes stateful substitution infrastructure, persistent REPL-level `TCState`, corrected deep resolution for displayed types, and fresh-meta based inference/checking paths for previously unresolved lambda/application cases. Rank-2 skolemization and full `forall` handling are still future work.
