@@ -20,7 +20,7 @@ import Data.Function ((&))
 -- Type definitions
 --------------------------------
 
--- | Unificationstate holding the substitution map and a counter for fresh IDs.
+-- | Unification state holding the substitution map and a counter for fresh IDs.
 data TCState = MkTCState
   { nextMeta :: !Int
   , subst    :: !(IntMap Type)
