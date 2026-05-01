@@ -89,6 +89,7 @@ peekPrecedence st = do
       -- implicit application operators if they appear next to an existing expression.
       TokIdent _  -> precVal PrecApp
       TokUIdent _ -> precVal PrecApp
+      TokInt _    -> precVal PrecApp
       TokLParen   -> precVal PrecApp
       TokLet      -> precVal PrecApp
       TokLam      -> precVal PrecApp
@@ -206,6 +207,8 @@ parseNud tok st ex =
   case tok.cls of
     TokIdent x -> pure $ Var tok.span x
 
+    TokUIdent x -> pure $ Var tok.span x
+
     TokInt val -> pure $ Lit tok.span val
 
     TokLParen -> do
@@ -264,11 +267,13 @@ parseLed left tok st ex = case tok.cls of
   _ -> throw ex (MkParseError "Unexpected token in operator position" tok.span)
   where
     isAppStarter = \case
-      TokIdent _ -> True
-      TokLParen  -> True
-      TokLet     -> True
-      TokLam     -> True
-      _          -> False
+      TokIdent _  -> True
+      TokUIdent _ -> True
+      TokInt _    -> True
+      TokLParen   -> True
+      TokLet      -> True
+      TokLam      -> True
+      _           -> False
 
 -- | Pure entry point for the Parser.
 runParser :: [Token] -> Either ParseError Expr

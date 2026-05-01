@@ -9,12 +9,15 @@ import Data.Generics.Labels ()
 import Control.Concurrent.MVar (MVar, takeMVar)
 
 import Brick.BChan (BChan, writeBChan)
-import Bluefin.Eff ((:>), Eff)
+import Bluefin.Eff ((:>), Eff, runPureEff)
+import Bluefin.Exception (try)
+import Bluefin.Reader (runReader)
 import Bluefin.IO (IOE, effIO)
 
 import Compiler.TUI (TUIEvent(..))
 import Compiler.Lexer (runLexer, LexError(..))
 import Compiler.Parser (runParser, ParseError(..))
+import Compiler.TypeChecker (infer, Env(..), TypeError(..))
 
 -- | The Terminal effect handle.
 -- Abstracts the UI so we can swap between basic IO and a `brick` TUI seamlessly.
@@ -37,7 +40,17 @@ replLoop term = do
           Left err -> term.output $ "Lex Error: " <> err.msg
           Right toks -> case runParser toks of
             Left pErr -> term.output $ "Parse Error: " <> pErr.msg
-            Right ast -> term.output $ "[AST]" <> T.pack (show ast)
+            Right ast -> do 
+              term.output $ "[AST]" <> T.pack (show ast)
+              -- Isoloate the typechecker effects purely
+              let tcResult = runPureEff $
+                    try \ex ->
+                      runReader (MkEnv []) \env ->
+                        infer env ex ast
+              case tcResult of
+                Left err -> term.output $ "Type Error: " <> err.msg <> " at " <> T.pack (show err.span)
+                Right ty -> term.output $ "[Type] " <> T.pack (show ty)
+
         replLoop term
 
 -- | A basic IO implementation of the Terminal effect to get us started

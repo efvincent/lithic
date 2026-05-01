@@ -1,6 +1,6 @@
 # lithic
 
-Lithic is a Haskell project for experimenting with a small compiler pipeline and an interactive REPL. The current executable, `lithic-cli`, launches a Brick-based terminal UI that reads expressions, lexes and parses them, and prints the resulting AST or an error.
+Lithic is a Haskell project for experimenting with a small compiler pipeline and an interactive REPL. The current executable, `lithic-cli`, launches a Brick-based terminal UI that reads expressions, lexes and parses them, and then runs bidirectional type inference/checking to print either inferred types or typed diagnostics.
 
 ## Quick Start
 
@@ -13,9 +13,9 @@ cabal run lithic-cli
 
 In the REPL:
 
-- Enter an expression such as `x`, `f x`, `fn x => x`, or `let id = fn x => x in id y`.
-- Successful input is rendered as `[AST]...` in the scrollback pane.
-- Lexing or parsing failures are shown inline in the same pane.
+- Enter an expression such as `42`, `\x : Int => x`, or `let id = \x : Int => x in id 5`.
+- Successful input is rendered as two lines: `[AST]...` followed by `[Type] ...`.
+- Lexing, parsing, and type errors are shown inline in the same pane.
 - Press Enter to submit the current editor contents.
 - Enter `:quit` or press Ctrl-C to exit the session.
 

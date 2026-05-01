@@ -90,7 +90,7 @@ Keep phases highly decoupled and preserve clear subsystem boundaries.
 - **Concrete types:** Uppercase identifiers (e.g., `Int`) or lowercase (e.g., `a` as type variable)
 
 ### Constraint and Context Syntax (Reserved for Future)
-- **Type class constraints:** Will use `=>` in type signatures (e.g., `Eq a => a -> a`) when typechecker is implemented
+- **Type class constraints:** Will use `=>` in type signatures (e.g., `Eq a => a -> a`) when constraint solving and class contexts are implemented
 - **This is consistent with term-level `=>` because contexts are type-level constructs**
 
 ## Error Handling and Diagnostics Strategy
@@ -103,10 +103,11 @@ Keep phases highly decoupled and preserve clear subsystem boundaries.
 
 - Prompt for input with `lithic> `.
 - Exit on `:quit` or frontend shutdown (Ctrl-C).
-- Run lexer, then parser, in sequence.
-- Output on success: `[AST]<show ast>` (parsed expression AST).
+- Run lexer, then parser, then bidirectional type inference/checking.
+- Output on parse/type success: `[AST]<show ast>` and `[Type] <show type>`.
 - Output on lexer failure: `Lex Error: <msg>` (precise source span included in structured error).
 - Output on parser failure: `Parse Error: <msg>` (precise source span included in structured error).
+- Output on type failure: `Type Error: <msg> at <span>`.
 - Scrollback viewport shows all historical output and input echoes.
 - Input editor is persistent across REPL iterations; cleared on Enter submission.
 - When REPL behavior changes, update user-facing docs and README in the same task.
