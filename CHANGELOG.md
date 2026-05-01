@@ -1,5 +1,15 @@
 # Revision history for lithic
 
+## 0.3.0.0 -- 2026-04-30
+
+* Wired bidirectional type inference/checking into the REPL runtime path after parse success.
+* REPL now emits `[AST]...` followed by `[Type] ...` for successful input.
+* REPL now reports type failures as `Type Error: <msg> at <span>`.
+* Parser now accepts uppercase identifiers (`TokUIdent`) as expression NUDs so constructor-like terms parse in expression position.
+* Parser implicit application starter set now includes both uppercase identifiers and integer literals.
+* Added custom `Show` formatting for `SourceSpan` as `[startLine,startCol]..[endLine,endCol]`.
+* Synced documentation (`README.md`, `.github/copilot-instructions.md`, `docs/terminal-effect.md`) to the updated REPL/typechecker behavior.
+
 ## 0.2.0.0 -- 2026-04-30
 
 * Completed parser frontend pipeline (lexer, parser, surface AST).

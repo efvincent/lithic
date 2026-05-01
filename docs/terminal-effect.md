@@ -247,7 +247,7 @@ The first fix was to hand the submitted input back to the REPL through the `MVar
 liftIO $ void $ tryPutMVar inputMVar (Just content)
 ```
 
-Once that happens, the blocked REPL thread resumes, tokenizes the input, and emits output back into the log via `TUIOutput`.
+Once that happens, the blocked REPL thread resumes, tokenizes the input, parses it, runs type inference/checking, and emits output back into the log via `TUIOutput`.
 
 ## Why `liftIO` is needed in the Brick UI
 

@@ -9,7 +9,19 @@ data SourceSpan = MkSourceSpan
   , startCol  :: !Int
   , endLine   :: !Int
   , endCol    :: !Int
-  } deriving (Show, Eq, Generic)
+  } deriving (Eq, Generic)
+
+instance Show SourceSpan where
+  show :: SourceSpan -> String
+  show ss 
+    = "[" <> show ss.startLine 
+    <> "," 
+    <> show ss.startCol 
+    <> "]..[" 
+    <> show ss.endLine 
+    <> ","
+    <> show ss.endCol 
+    <> "]"
 
 -- | The core type representation for Lithic
 data Type
