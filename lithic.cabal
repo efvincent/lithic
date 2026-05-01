@@ -1,6 +1,6 @@
 cabal-version:      3.4
 name:               lithic
-version:            0.3.0.0
+version:            0.4.1.0
 build-type:         Simple
 license:            NONE
 author:             Eric Vincent (arch)
@@ -19,7 +19,8 @@ common shared
         generic-lens,
         brick,
         vty,
-        vty-crossplatform
+        vty-crossplatform,
+        containers
     default-extensions:
         BlockArguments
         LambdaCase

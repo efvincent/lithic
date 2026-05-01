@@ -1,5 +1,21 @@
 # Revision history for lithic
 
+## 0.4.1.0 -- 2026-05-01
+
+* Moved shared source-span helpers (`getSpan`, `getTypeSpan`) into `Compiler.AST` to preserve phase boundaries and remove parser-internal coupling from the typechecker.
+* Refined lambda annotation mismatch diagnostics to report the specific annotation span instead of the broader lambda span.
+* Added architecture notes in `docs/architecture-vs-type-system.md` and linked them from `README.md`.
+* Synced typechecker docs and user-facing examples with the current fresh-meta inference/checking behavior.
+
+## 0.4.0.0 -- 2026-05-01
+
+* Added stateful unification infrastructure to the bidirectional typechecker via `TCState`, `TMeta`, `force`, `unify`, and `occurs`.
+* Moved ownership of the typechecker substitution state to the executable entrypoint so the REPL runs with a persistent unification handle.
+* Corrected deep type finalization so zonked user-facing types return the resolved outer type after forcing substitutions.
+* Added fresh-meta inference/checking paths so unannotated lambdas and unknown function applications can be constrained through unification.
+* Added `containers` as a package dependency for the `IntMap`-backed substitution store.
+* Added `docs/typechecker.md` and synced README, terminal-effect notes, and project instructions to the stateful unification architecture.
+
 ## 0.3.0.0 -- 2026-04-30
 
 * Wired bidirectional type inference/checking into the REPL runtime path after parse success.

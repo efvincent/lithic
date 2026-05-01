@@ -9,7 +9,7 @@ import Data.Generics.Labels ()
 import Control.Concurrent.MVar (MVar, takeMVar)
 
 import Brick.BChan (BChan, writeBChan)
-import Bluefin.Eff ((:>), Eff, runPureEff)
+import Bluefin.Eff ((:>), Eff)
 import Bluefin.Exception (try)
 import Bluefin.Reader (runReader)
 import Bluefin.IO (IOE, effIO)
@@ -17,7 +17,8 @@ import Bluefin.IO (IOE, effIO)
 import Compiler.TUI (TUIEvent(..))
 import Compiler.Lexer (runLexer, LexError(..))
 import Compiler.Parser (runParser, ParseError(..))
-import Compiler.TypeChecker (infer, Env(..), TypeError(..))
+import Compiler.TypeChecker (infer, Env(..), TypeError(..), TCState (..), zonk)
+import Bluefin.State (State)
 
 -- | The Terminal effect handle.
 -- Abstracts the UI so we can swap between basic IO and a `brick` TUI seamlessly.
@@ -26,9 +27,9 @@ data Terminal es = MkTerminal
   , output :: Text -> Eff es () 
   } deriving (Generic)
 
--- | The core REPL loop. It depends strictly on the abstract Terminal effect.
-replLoop :: Terminal es -> Eff es ()
-replLoop term = do
+-- | The core REPL loop. It now takes a persistent unification state handle.
+replLoop :: forall st es. (st :> es) => Terminal es -> State TCState st -> Eff es ()
+replLoop term st = do
   mInput <- term.prompt "lithic> "
   case mInput of
     Nothing -> term.output "Goodbye!"
@@ -41,17 +42,19 @@ replLoop term = do
           Right toks -> case runParser toks of
             Left pErr -> term.output $ "Parse Error: " <> pErr.msg
             Right ast -> do 
-              term.output $ "[AST]" <> T.pack (show ast)
-              -- Isoloate the typechecker effects purely
-              let tcResult = runPureEff $
-                    try \ex ->
-                      runReader (MkEnv []) \env ->
-                        infer env ex ast
+              term.output $ "[AST] " <> T.pack (show ast)
+              
+              -- Run Reader and Exception locally, but share the persistent 'st'
+              tcResult <- try \ex ->
+                runReader (MkEnv []) \env -> do
+                  rawTy <- infer st env ex ast
+                  zonk st rawTy -- Deeply resolve before printing
+              
               case tcResult of
                 Left err -> term.output $ "Type Error: " <> err.msg <> " at " <> T.pack (show err.span)
                 Right ty -> term.output $ "[Type] " <> T.pack (show ty)
 
-        replLoop term
+        replLoop term st
 
 -- | A basic IO implementation of the Terminal effect to get us started
 runTerminalIO :: forall io es. (io :> es) => IOE io -> Terminal es

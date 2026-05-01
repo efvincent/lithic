@@ -11,7 +11,7 @@ import Bluefin.Eff ((:>), Eff, runPureEff)
 import Bluefin.State (State, get, put, runState)
 import Bluefin.Exception (Exception, throw, try)
 
-import Compiler.AST (Expr(..), SourceSpan(..), Type (..))
+import Compiler.AST (Expr(..), SourceSpan(..), Type (..), getTypeSpan, getSpan)
 import Compiler.Lexer (Token(..), TokenClass(..))
 
 -- | Precedence levels for lithic operators, from loosest to tightest binding
@@ -54,24 +54,6 @@ advance st = do
     (t:ts) -> do
       put st $ curSt & #tokens .~ ts
       pure (Just t)
-
--- | Extracts the source span from any AST node
-getSpan :: Expr -> SourceSpan
-getSpan = \case
-  Var sp _     -> sp
-  Lit sp _     -> sp
-  Lam sp _ _ _ -> sp
-  App sp _ _   -> sp
-  Let sp _ _ _ -> sp
-  Ann sp _ _   -> sp
-
--- | Extracts the source span from a Type node
-getTypeSpan :: Type -> SourceSpan
-getTypeSpan = \case
-  TVar sp _      -> sp
-  TInt sp        -> sp
-  TArrow sp _ _  -> sp
-  TForall sp _ _ -> sp
 
 -- | Creates a bounding box spanning from the start of the first to the end of the second.
 mergeSpan :: SourceSpan -> SourceSpan -> SourceSpan
