@@ -72,6 +72,7 @@ getTypeSpan = \case
   TInt sp        -> sp
   TArrow sp _ _  -> sp
   TForall sp _ _ -> sp
+  TMeta sp _1    -> sp
 
 -- | Creates a bounding box spanning from the start of the first to the end of the second.
 mergeSpan :: SourceSpan -> SourceSpan -> SourceSpan

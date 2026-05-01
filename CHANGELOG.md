@@ -1,5 +1,13 @@
 # Revision history for lithic
 
+## 0.4.0.0 -- 2026-05-01
+
+* Added stateful unification infrastructure to the bidirectional typechecker via `TCState`, `TMeta`, `force`, `unify`, and `occurs`.
+* Moved ownership of the typechecker substitution state to the executable entrypoint so the REPL runs with a persistent unification handle.
+* Corrected deep type finalization so zonked user-facing types return the resolved outer type after forcing substitutions.
+* Added `containers` as a package dependency for the `IntMap`-backed substitution store.
+* Added `docs/typechecker.md` and synced README, terminal-effect notes, and project instructions to the stateful unification architecture.
+
 ## 0.3.0.0 -- 2026-04-30
 
 * Wired bidirectional type inference/checking into the REPL runtime path after parse success.

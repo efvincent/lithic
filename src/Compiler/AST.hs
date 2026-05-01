@@ -28,7 +28,8 @@ data Type
   = TVar SourceSpan Text
   | TInt SourceSpan
   | TArrow SourceSpan Type Type
-  | TForall SourceSpan [Text] Type -- ^ Universal quantification: forall a b. a -> b
+  | TForall SourceSpan [Text] Type  -- ^ Universal quantification: forall a b. a -> b
+  | TMeta SourceSpan Int            -- ^ A unification meta-variable
   deriving (Show, Eq, Generic)
 
 -- | The core expression AST for lithic

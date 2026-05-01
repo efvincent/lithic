@@ -32,12 +32,14 @@ Keep phases highly decoupled and preserve clear subsystem boundaries.
 3. Type System (Bidirectional Type Checking):
    - Do not default to Hindley-Milner assumptions.
    - Prefer bidirectional typing architecture, with mutually recursive synthesis and checking phases.
+  - The current checker includes a stateful substitution engine (`TCState`) and meta-variables (`TMeta`) with shallow forcing (`force`) and deep finalization (`zonk`).
    - Design type-level changes so advanced features such as rank-2 types and row polymorphism remain feasible.
 
 4. Terminal UI and REPL:
    - The interactive frontend uses `brick` and `vty`.
    - Preserve separation between frontend-agnostic REPL logic (`Compiler.REPL`) and Brick UI code (`Compiler.TUI`).
    - Keep the `Terminal es` abstraction in place; do not leak Brick-specific behavior into compiler stages.
+  - The executable now allocates a persistent `TCState` in `Main` and threads it through `replLoop`; preserve that ownership boundary.
    - Maintain thread-safe handoff patterns (`BChan` events and non-blocking `MVar` submission patterns) and avoid event-loop blocking.
 
 5. Macro System and Extensible Notation (Future Architecture):
@@ -108,6 +110,7 @@ Keep phases highly decoupled and preserve clear subsystem boundaries.
 - Output on lexer failure: `Lex Error: <msg>` (precise source span included in structured error).
 - Output on parser failure: `Parse Error: <msg>` (precise source span included in structured error).
 - Output on type failure: `Type Error: <msg> at <span>`.
+- Inferred types are zonked before display so resolved substitutions appear in user-facing output.
 - Scrollback viewport shows all historical output and input echoes.
 - Input editor is persistent across REPL iterations; cleared on Enter submission.
 - When REPL behavior changes, update user-facing docs and README in the same task.

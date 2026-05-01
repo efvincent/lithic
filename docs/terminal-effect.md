@@ -31,15 +31,15 @@ The type parameter `es` is the active Bluefin effect stack. `Terminal es` stores
 - `Just input` means continue the loop with user input.
 - `Nothing` means terminate gracefully after a frontend shutdown signal or other interpreter-specific close condition.
 
-### 3) REPL loop depends only on Terminal
+### 3) REPL loop depends on Terminal plus typechecker state
 
-`replLoop` is typed as:
+`replLoop` is now typed as:
 
 ```haskell
-replLoop :: Terminal es -> Eff es ()
+replLoop :: (st :> es) => Terminal es -> State TCState st -> Eff es ()
 ```
 
-That signature is the architectural boundary. The loop knows nothing about stdin/stdout, `brick`, or any other frontend API. It only consumes `prompt` and `output`.
+That signature keeps the frontend boundary intact while making the typechecker's substitution state explicit. The loop still knows nothing about stdin/stdout, `brick`, or any other frontend API. It consumes `prompt` and `output`, while the caller supplies a persistent `TCState` handle for the unification engine.
 
 ## Active executable wiring
 
@@ -52,14 +52,15 @@ main = do
   inputMVar <- newEmptyMVar
 
   _ <- forkIO $ runEff \io -> do
-    let term = runTerminalBrick eventChan inputMVar io
-    replLoop term
+    evalState (MkTCState 0 IM.empty) \st -> do
+      let term = runTerminalBrick eventChan inputMVar io
+      replLoop term st
     effIO io $ writeBChan eventChan TUIQuit
 
   runTUI eventChan inputMVar
 ```
 
-That means the user-facing path today is the Brick-backed interpreter, not the plain stdin/stdout one.
+That means the user-facing path today is the Brick-backed interpreter, not the plain stdin/stdout one, and the REPL thread owns a persistent unification state for the duration of the session.
 
 ## Alternate interpreter: IO-backed terminal
 
