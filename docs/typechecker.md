@@ -49,4 +49,8 @@ You should use these operations for different purposes:
 
 ## Current Scope
 
-This branch now includes stateful substitution infrastructure, persistent REPL-level `TCState`, corrected deep resolution for displayed types, and fresh-meta based inference/checking paths for previously unresolved lambda/application cases. Rank-2 skolemization and full `forall` handling are still future work.
+This branch now includes stateful substitution infrastructure, persistent REPL-level `TCState`, corrected deep resolution for displayed types, fresh-meta based inference/checking paths for previously unresolved lambda/application cases, and HM-style let-polymorphism (`generalize`/`instantiate`) for `let` bindings.
+
+`check` now routes its generic fallback through the `subsumes` bridge, but `subsumes` is still a direct wrapper around `unify` today. Rank-2 skolemization and richer `forall` handling in subsumption/unification remain future work.
+
+Generalized type variables are currently rendered using compiler-generated internal names in user output; this is a presentation choice and not the required surface syntax for user-written type signatures.

@@ -3,8 +3,12 @@ module Compiler.TypeChecker where
 import Data.Text (Text)
 import GHC.Generics (Generic)
 import Data.Generics.Labels ()
+import Data.IntSet (IntSet)
 import Data.IntMap.Strict (IntMap)
+import Data.Map.Strict (Map)
+import qualified Data.IntSet as IS
 import qualified Data.IntMap.Strict as IM
+import qualified Data.Map.Strict as Map
 import qualified Data.Text as T
 
 import Bluefin.Eff ((:>), Eff)
@@ -51,10 +55,6 @@ freshMeta sp st = do
   modify st (#nextMeta .~ (mId + 1))
   pure $ TMeta sp mId
 
--- | Helper to push a new binding onto the lexical environment
-extendEnv :: Text -> Type -> Env -> Env
-extendEnv x ty env = MkEnv ((x, ty) : env.bindings)
-
 -- | Extract a span from an Expr to attach to localized errors.
 getSpan :: Expr -> SourceSpan
 getSpan = \case
@@ -76,14 +76,15 @@ infer
 infer st env ex expr = 
   case expr of
     Lit sp _ -> pure $ TInt sp
-
+    
     Var sp x -> do
       currentEnv <- ask env
       case lookup x currentEnv.bindings of
-        Just ty -> pure ty
+        -- Use the effectful instantiate to unpack TForall if present
+        Just ty -> instantiate st ty
         Nothing -> throw ex $ MkTypeError ("Unbound variable: " <> x) sp
 
-    -- 3. Lambdas (Both Annotated and Unannotated)
+    -- Lambdas (Both Annotated and Unannotated)
     Lam sp param mAnn body -> do
       -- Determine the parameter type: use annotation if present, otherwise guess via TMeta
       paramTy <- case mAnn of
@@ -100,7 +101,7 @@ infer st env ex expr =
         
       pure $ TArrow sp paramTy bodyTy
 
-    -- 4. Function Application
+    -- Function Application
     App sp f arg -> do
       -- Infer the function and deeply resolve it to clear any substitutions
       rawTyF <- infer st env ex f
@@ -128,22 +129,26 @@ infer st env ex expr =
         -- Failure case
         _ -> throw ex $ MkTypeError "Attempted to apply a non-function" sp
 
-    -- 5. Explicit Type Annotations (The bridge to checking)
+    -- Explicit Type Annotations (The bridge to checking)
     Ann _ e expectedTy -> do
       -- We know the expected type, so we push it down into the checking phase
       check st env ex e expectedTy
       pure expectedTy
 
-    -- 6. Let Bindings
+    -- Let Bindings
     Let _ name val body -> do
       -- 1. Infer the type of the value being bound
-      valTy <- infer st env ex val
+      rawValTy <- infer st env ex val
       
-      -- 2. Extend the environment
+      -- 2. Deeply resolve it
+      zonkedValTy <- zonk st rawValTy
       e <- ask env
-      let newEnv = MkEnv ((name, valTy) : e.bindings)
+      polyTy <- generalize st e zonkedValTy
+
+      -- 3. Extend the environment with the generalized polymorphic type
+      let newEnv = MkEnv ((name, polyTy) : e.bindings)
       
-      -- 3. Infer the body in the strictly scoped new environment
+      -- 4. Infer the body in the strictly scoped new environment
       runReader newEnv \newEnvHandle ->
         infer st newEnvHandle ex body
 
@@ -195,10 +200,10 @@ check st envHandle ex expr expectedTy = do
     (Lam sp _ _ _, _) -> 
       throw ex $ MkTypeError "Type mismatch: Expected a non-function type, but got a lambda." sp
 
-    -- 5. The Bridge: If no specific checking rules match, fall back to Synthesis + Unification
+    -- 5. The Bridge Fallback: Infer the actual type and use the subsumption bridge
     _ -> do
-      inferredTy <- infer st envHandle ex expr
-      unify st ex inferredTy forcedTy (getSpan expr)
+      actualTy <- infer st envHandle ex expr
+      subsumes st ex actualTy expectedTy (getSpan expr)     
 
 -- | Verify that the inferred type subsumes the expected type.
 subsumes
@@ -233,7 +238,7 @@ zonk st ty = do
   forcedTy <- force st ty
   case forcedTy of
     TArrow sp p r -> TArrow sp <$> zonk st p <*> zonk st r
-    -- (TODO: TForall handling goes here)
+    TForall sp vars inner -> TForall sp vars <$> zonk st inner
     _ -> pure forcedTy
 
 -- | Unify tow types, updating the substitution state if necessary.
@@ -285,3 +290,83 @@ occurs st mId ty = do
       pOccurs <- occurs st mId p
       if pOccurs then pure True else occurs st mId r
     _ -> pure False
+
+-- | instantiates a polymorphic type by replaceing its quantified variables
+-- with fresh metavariables
+instantiate
+  :: forall st es. (st :> es)
+  => State TCState st -> Type -> Eff es Type
+instantiate st ty = 
+  case ty of
+    TForall _ vars innerTy -> do
+      -- Generate a fresh meta-variable for each bound name
+      subst <- traverse (\v -> (v,) <$> freshMeta (getTypeSpan innerTy) st) vars
+      let substMap = Map.fromList subst
+      pure $ subBound substMap innerTy
+    _ -> pure ty
+
+-- | Generalize a type over its free meta-variables
+generalize
+  :: forall st es. (st :> es)
+  => State TCState st -> Env -> Type -> Eff es Type
+generalize st env ty = do
+  envFtv <- ftvEnv st env
+  tyFtv <- ftvType st ty  
+  let unboundMetas = IS.toList (IS.difference tyFtv envFtv)
+  if null unboundMetas
+  then pure ty
+  else do
+    -- '$' guarantees no collision with user annotations since TokIdent requires isAlpha
+    let nameMap = IM.fromList [ (mId, "$" <> T.pack (show mId)) | mId <- unboundMetas ]
+    let genTy = replaceMetas nameMap ty
+    pure $ TForall (getTypeSpan ty) (IM.elems nameMap) genTy
+
+-- | Purely replace meta-variables with concrete type variables
+replaceMetas :: IntMap Text -> Type -> Type
+replaceMetas nameMap ty =
+  case ty of
+    TMeta sp mId -> 
+      case IM.lookup mId nameMap of
+        Just name -> TVar sp name
+        Nothing   -> ty
+    TArrow sp p r -> TArrow sp (replaceMetas nameMap p) (replaceMetas nameMap r)
+    TForall sp vars inner -> TForall sp vars (replaceMetas nameMap inner)
+    _ -> ty
+
+-- | replaces bound type variables (TVar) with their instantiated concrete types.
+subBound :: Map Text Type -> Type -> Type
+subBound subMap ty =
+  case ty of
+    TVar _ v -> case Map.lookup v subMap of
+      Just replacement -> replacement
+      Nothing -> ty
+    TInt _ -> ty
+    TArrow sp p r -> TArrow sp (subBound subMap p) (subBound subMap r)
+    TForall sp vars innerTy ->
+      -- If a nested forall shadows a variable, remove it from the active substitution map
+      let subMap' = foldr Map.delete subMap vars
+      in TForall sp vars (subBound subMap' innerTy)
+    TMeta _ _ -> ty
+
+-- | Collects all unbound meta-variable IDs in a type.
+ftvType
+  :: forall st es. (st :> es)
+  => State TCState st -> Type -> Eff es IntSet
+ftvType st ty = do
+  forced <- force st ty
+  case forced of
+    TMeta _ mId -> pure $ IS.singleton mId
+    TArrow _ p r -> do
+      pVars <- ftvType st p
+      rVars <- ftvType st r 
+      pure $ IS.union pVars rVars
+    TForall _ _ inner -> ftvType st inner
+    _ -> pure IS.empty
+
+-- | Collects all unbound meta-variable IDs across the entire lexical environment
+ftvEnv
+  :: forall st es. (st :> es)
+  => State TCState st -> Env -> Eff es IntSet
+ftvEnv st env = do
+  sets <- traverse (\(_, t) -> ftvType st t) env.bindings
+  pure $ IS.unions sets

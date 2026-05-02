@@ -25,6 +25,7 @@ In the REPL:
 - [Terminal Custom Effect](docs/terminal-effect.md) explains the REPL abstraction, how `BChan` and `MVar` split cross-thread communication, and why the TUI layer uses `liftIO` with `tryPutMVar`.
 - [Bidirectional Typechecking & Unification](docs/typechecker.md) explains the `infer`/`check` architecture, the role of the `subsumes` bridge, and how the stateful substitution engine uses `force` and `zonk`.
 - [Architecture vs. Type System](docs/architecture-vs-type-system.md) details the difference between Algorithm W and Bidirectional checking, and explains the mechanics of let-generalization.
+- [Optimizations and Technical Debt](docs/optimizations.md) describes performance bottlenecks and issues to be addressed in the future.
 
 ## Project Layout (high level)
 

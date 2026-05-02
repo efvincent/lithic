@@ -1,5 +1,15 @@
 # Revision history for lithic
 
+## 0.5.0.0 -- 2026-05-02
+
+* Added HM-style let-polymorphism in the bidirectional checker by generalizing inferred `let`-bound types and instantiating polymorphic bindings on variable lookup.
+* Added `instantiate`, `generalize`, `replaceMetas`, `subBound`, `ftvType`, and `ftvEnv` support paths in the typechecker to drive rank-1 polymorphic `let` behavior.
+* Updated checker fallback routing to go through the `subsumes` bridge, preserving the future extension point for rank-2 skolemization.
+* Extended deep type finalization (`zonk`) to recurse through `TForall` values.
+* Removed an unused environment helper from the typechecker.
+* Added `docs/optimizations.md` documenting the current let-generalization environment traversal cost and a level-based generalization roadmap.
+* Synced `README.md`, `docs/typechecker.md`, and `docs/architecture-vs-type-system.md` with the current implementation status and architecture guidance.
+
 ## 0.4.1.0 -- 2026-05-01
 
 * Moved shared source-span helpers (`getSpan`, `getTypeSpan`) into `Compiler.AST` to preserve phase boundaries and remove parser-internal coupling from the typechecker.
