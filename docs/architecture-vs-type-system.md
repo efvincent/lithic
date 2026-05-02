@@ -1,17 +1,12 @@
-# Architecture vs. Type System: Bidirectional Hindley-Milner
+# Architecture vs. Type System: Bidirectional Foundations
 
-When discussing modern compiler design, there is often a terminology collision between **Hindley-Milner (HM)** and **Bidirectional Typechecking**. It is easy to assume they are mutually exclusive alternatives, but they actually answer two completely different questions:
+When discussing modern compiler design, there is often a terminology collision between **Hindley-Milner (HM)** and **Bidirectional Typechecking**. 
 
-1. **The Type System (The "What"):** Hindley-Milner defines *what* the type system can express. Specifically, it is the ability to support parametric polymorphism (e.g., `forall a. a -> a`) without requiring the programmer to explicitly annotate every function and variable.
-2. **The Architecture (The "How"):** Algorithm W and Bidirectional Typechecking are algorithms that define *how* the compiler figures those types out.
-
-Lithic uses a **Bidirectional Architecture** to implement the **Hindley-Milner Feature Set**, serving as the bedrock for advanced features like Rank-2 Polymorphism and Row Polymorphism.
-
----
+Lithic intentionally avoids defaulting to standard Hindley-Milner assumptions. Instead, it uses a **Bidirectional Architecture** as the bedrock to support advanced type theory (like Rank-2 Polymorphism and Row Polymorphism), while still providing baseline quality-of-life features like parametric let-generalization.
 
 ## Why Abandon Algorithm W?
 
-Traditionally, the Hindley-Milner type system is implemented using **Algorithm W**. Algorithm W is purely bottom-up: it synthesizes types from the leaves of the AST to the root, generating global constraints and solving them via unification. It has no concept of "checking against an expected type."
+Traditionally, basic functional languages implement type inference using **Algorithm W**. Algorithm W is purely bottom-up: it synthesizes types from the leaves of the AST to the root, generating global constraints and solving them via unification. It has no concept of "checking against an expected type."
 
 For a basic ML or Haskell 98 clone, Algorithm W is perfect. However, Lithic's goal is to support **Rank-2 Polymorphism** (functions that take polymorphic functions as arguments, e.g., `f :: (forall a. a -> a) -> Int`).
 
@@ -60,5 +55,5 @@ By building the Bidirectional engine first, Lithic avoids massive rewrites later
 
 1. **Monomorphic Core:** Basic `infer`/`check` loop. *(Complete)*
 2. **Stateful Unification:** Effectful constraint solving with `TMeta`. *(Complete)*
-3. **Let-Polymorphism (HM):** Adding `TForall`, `generalize`, and `instantiate` to `Let` bindings.
+3. **Let-Polymorphism (HM):** `TForall`, `generalize`, and `instantiate` for `Let` bindings. *(Complete)*
 4. **Rank-2 Skolemization:** Expanding the `subsumes` bridge to instantiate expected Rank-2 types with rigid constants (Skolems) before unification.
