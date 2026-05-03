@@ -1,6 +1,6 @@
 cabal-version:      3.4
 name:               lithic
-version:            0.5.0.0
+version:            0.5.1.0
 build-type:         Simple
 license:            NONE
 author:             Eric Vincent (arch)
@@ -55,3 +55,21 @@ executable lithic-cli
     hs-source-dirs:   app
     default-language: GHC2024
     ghc-options:      -threaded
+    
+test-suite lithic-test
+    import:           shared
+    type:             exitcode-stdio-1.0
+    hs-source-dirs:   test
+    main-is:          Main.hs
+    build-depends:    base
+                    , lithic
+                    , text
+                    , bytestring
+                    , filepath
+                    , tasty
+                    , tasty-golden
+                    , tasty-hunit
+                    , bluefin
+                    , containers
+    default-language: GHC2024
+    ghc-options:      -threaded -rtsopts -with-rtsopts=-N

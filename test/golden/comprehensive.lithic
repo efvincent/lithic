@@ -1,0 +1,4 @@
+let id = \x => x in
+let apply = \f => \arg => f arg in
+let const = \x : Int => \y => x in
+apply id const (42 : Int) (id 100)
