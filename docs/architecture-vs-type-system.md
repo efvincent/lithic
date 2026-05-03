@@ -24,6 +24,8 @@ By adding the `check` phase, the compiler can look at a Rank-2 type signature, p
 
 ## The Monomorphism Restriction & Let-Generalization
 
+If you want quick definitions for `forall`, rigid skolems, unification, and occurs check, see `docs/higher-rank-types.md` first.
+
 Before introducing Rank-2 types, a bidirectional HM checker must handle standard Rank-1 polymorphism. Consider the following completely valid functional program:
 
 ```haskell
@@ -56,4 +58,6 @@ By building the Bidirectional engine first, Lithic avoids massive rewrites later
 1. **Monomorphic Core:** Basic `infer`/`check` loop. *(Complete)*
 2. **Stateful Unification:** Effectful constraint solving with `TMeta`. *(Complete)*
 3. **Let-Polymorphism (HM):** `TForall`, `generalize`, and `instantiate` for `Let` bindings. *(Complete)*
-4. **Rank-2 Skolemization:** Expanding the `subsumes` bridge to instantiate expected Rank-2 types with rigid constants (Skolems) before unification.
+4. **Initial Rank-2 Subsumption:** `subsumes` now skolemizes expected `forall` types, instantiates inferred polymorphic types, and performs arrow subsumption before unification. *(Complete)*
+
+The remaining roadmap item in this area is to broaden rank-polymorphism coverage and diagnostics beyond the current subsumption-focused implementation.

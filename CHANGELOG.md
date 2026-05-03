@@ -1,5 +1,20 @@
 # Revision history for lithic
 
+## 0.6.0.0 -- 2026-05-03
+
+* Added initial rank-2 subsumption support in the bidirectional checker by expanding `subsumes` with:
+	* expected-type skolemization for `forall` types,
+	* inferred-type instantiation for polymorphic values,
+	* arrow subsumption (domain contravariance and range covariance).
+* Added rigid skolem constants (`TSkolem`) in the type AST and unified them only by identity to prevent unsound instantiation.
+* Added helper paths for skolem generation and skolemization in the typechecker.
+* Added golden coverage for rank-2 success and rigid-skolem rejection paths:
+	* `test/golden/rank2-success.lithic` / `.golden`
+	* `test/golden/rank2-rigid-fail.lithic` / `.golden`
+* Added `docs/higher-rank-types.md` as a focused reference for rank-2 polymorphism, skolemization, `forall`, unification, and occurs-check terminology.
+* Added a novice-oriented "How To Read The Docs" guide in `README.md` and cross-links from `docs/typechecker.md` and `docs/architecture-vs-type-system.md` to improve concept discoverability.
+* Synced documentation (`README.md`, `docs/typechecker.md`, `docs/architecture-vs-type-system.md`) with current rank-2 subsumption behavior.
+
 ## 0.5.1.0 -- 2026-05-02
 
 * Added `tasty` and `tasty-golden` test harness to lock in the Hindley-Milner typechecking baseline.
