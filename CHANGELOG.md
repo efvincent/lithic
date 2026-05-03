@@ -12,6 +12,7 @@
 	* `test/golden/rank2-success.lithic` / `.golden`
 	* `test/golden/rank2-rigid-fail.lithic` / `.golden`
 * Added `docs/higher-rank-types.md` as a focused reference for rank-2 polymorphism, skolemization, `forall`, unification, and occurs-check terminology.
+* Added `docs/project-plan.md` as a long-range architecture and roadmap record, and linked it from `README.md`.
 * Added a novice-oriented "How To Read The Docs" guide in `README.md` and cross-links from `docs/typechecker.md` and `docs/architecture-vs-type-system.md` to improve concept discoverability.
 * Synced documentation (`README.md`, `docs/typechecker.md`, `docs/architecture-vs-type-system.md`) with current rank-2 subsumption behavior.
 
