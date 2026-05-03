@@ -209,7 +209,24 @@ check st envHandle ex expr expectedTy = do
 subsumes
   :: forall st ex es. (st :> es, ex :> es)
   => State TCState st -> Exception TypeError ex -> Type -> Type -> SourceSpan -> Eff es ()
-subsumes st ex inferred expected sp = unify st ex inferred expected sp
+subsumes st ex inferred expected sp = do
+  infForced <- force st inferred
+  expForced <- force st expected
+  case (infForced, expForced) of
+    -- Rule 1: Expected is polymorphic -> Skolemize with rigid constants
+    (_, TForall{}) -> do
+      skolemizedExp <- skolemize st expForced
+      subsumes st ex infForced skolemizedExp sp
+    -- Rule 2: Inferred is polymorphic -> Instantiate with flexible metas
+    (TForall{}, _) -> do
+      instantiatedInf <- instantiate st infForced
+      subsumes st ex instantiatedInf expForced sp
+    -- Rule 3: Arrow Subsumption (Contravariant Domain, Covariant Range)
+    (TArrow _ d1 r1, TArrow _ d2 r2) -> do
+      subsumes st ex d2 d1 sp -- Note the flip! Expected domain must subsume inferred domain.
+      subsumes st ex r1 r2 sp 
+    -- Fallback: standard unification
+    _ -> unify st ex infForced expForced sp
 
 -- | Shallow resolution: Follows TMeta chains until it hits a concrete type or an unbound TMeta.
 -- It does NOT deeply walk into TArrows.
@@ -256,7 +273,11 @@ unify st ex t1 t2 sp = do
     (TMeta _ m, _) -> bindMeta st ex  m ty2 sp
     (_, TMeta _ m) -> bindMeta st ex  m ty1 sp
 
+    -- Skolems only unify with the exact same Skolem
+    (TSkolem _ s1 _, TSkolem _ s2 _) | s1 == s2 -> pure ()
+
     (TInt _, TInt _) -> pure ()
+    
     (TArrow _ p1 r1, TArrow _ p2 r2) -> do
       unify st ex p1 p2 sp
       unify st ex r1 r2 sp
@@ -346,7 +367,29 @@ subBound subMap ty =
       -- If a nested forall shadows a variable, remove it from the active substitution map
       let subMap' = foldr Map.delete subMap vars
       in TForall sp vars (subBound subMap' innerTy)
-    TMeta _ _ -> ty
+    _ -> ty -- Catches TMeta and TSkolem
+    
+-- | Generate a fresh rigit skolem constant
+freshSkolem
+  :: forall st es. (st :> es) 
+  => SourceSpan -> Text -> State TCState st -> Eff es Type
+freshSkolem sp name st = do
+  curSt <- get st
+  let sId = curSt.nextMeta
+  modify st (#nextMeta .~ (sId + 1))
+  pure $ TSkolem sp sId name
+
+-- | Skolemize a polymorphic type by replacing its quantified variables with rigid skolems
+skolemize 
+  :: forall st es. (st :> es)
+  => State TCState st -> Type -> Eff es Type
+skolemize st ty =
+  case ty of
+    TForall _ vars innerTy -> do
+      subst <- traverse (\v -> (v,) <$> freshSkolem (getTypeSpan innerTy) v st) vars
+      let substMap = Map.fromList subst
+      pure $ subBound substMap innerTy
+    _ -> pure ty
 
 -- | Collects all unbound meta-variable IDs in a type.
 ftvType

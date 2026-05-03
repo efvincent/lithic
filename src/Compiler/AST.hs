@@ -30,33 +30,29 @@ data Type
   | TArrow SourceSpan Type Type
   | TForall SourceSpan [Text] Type  -- ^ Universal quantification: forall a b. a -> b
   | TMeta SourceSpan Int            -- ^ A unification meta-variable
+  | TSkolem SourceSpan Int Text     -- ^ A rigid skolem constant for Rank-2 typechecking
   deriving (Show, Eq, Generic)
 
 -- | The core expression AST for lithic
 data Expr
-  = Var SourceSpan Text
-  -- ^ A variable identifier: x
-  | Lit SourceSpan Int
-  -- ^ A primitive integer literal
-  | Lam SourceSpan Text (Maybe Type) Expr
-  -- ^ A lambda abstraction, optionally annotated: \x : Int -> expr
-  | App SourceSpan Expr Expr
-  -- ^ A function application: f x
-  | Let SourceSpan Text Expr Expr
-  -- ^ Explicit let-binding for FBIP: let x = expr1 in expr2
-  | Ann SourceSpan Expr Type
-  -- ^ Explicit type annotation: expr : Type
+  = Var SourceSpan Text                   -- ^ A variable identifier: x
+  | Lit SourceSpan Int                    -- ^ A primitive integer literal
+  | Lam SourceSpan Text (Maybe Type) Expr -- ^ A lambda abstraction, optionally annotated: \x : Int -> expr
+  | App SourceSpan Expr Expr              -- ^ A function application: f x
+  | Let SourceSpan Text Expr Expr         -- ^ Explicit let-binding for FBIP: let x = expr1 in expr2
+  | Ann SourceSpan Expr Type              -- ^ Explicit type annotation: expr : Type
   deriving (Show, Eq, Generic)
 
 -- | Extract the source span from a Type node
 getTypeSpan :: Type -> SourceSpan
 getTypeSpan = \case
-  TVar sp _ -> sp
-  TInt sp -> sp
-  TArrow sp _ _ -> sp
+  TVar sp _      -> sp
+  TInt sp        -> sp
+  TArrow sp _ _  -> sp
   TForall sp _ _ -> sp
-  TMeta sp _ -> sp
-
+  TMeta sp _     -> sp
+  TSkolem sp _ _ -> sp
+  
 -- | Extracts the source span from any AST node
 getSpan :: Expr -> SourceSpan
 getSpan = \case

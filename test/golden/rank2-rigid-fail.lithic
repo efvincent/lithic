@@ -1,0 +1,1 @@
+let inc = \x : Int => x in (\f : (forall a. a -> a) -> Int => f inc) (\g => 42)

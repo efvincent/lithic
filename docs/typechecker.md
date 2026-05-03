@@ -19,12 +19,19 @@ The `check` function takes an expression and an *expected* type, pushes known ty
 
 ## The Bridge: `subsumes` and `unify`
 
+If terms such as `forall`, rigid skolems, unification, or occurs check are unfamiliar, read the short glossary in `docs/higher-rank-types.md` first.
+
 When `check` encounters an expression it cannot break down directly (for instance, checking a variable against a specific type), it falls back to a synthesis-and-subsume strategy.
 
 1. **Infer**: It synthesizes the actual type of the expression.
 2. **Subsume**: It calls `subsumes inferred expected`.
 
-Currently, `subsumes` acts as a direct wrapper around `unify`. In the future, `subsumes` will be expanded to handle **Rank-2 Skolemization** (instantiating polymorphic `forall` types with fresh variables or rigid constants) before handing the structural types off to the unification engine.
+`subsumes` now performs rank-2-aware routing before falling back to plain unification:
+
+1. If the expected type is polymorphic (`forall`), it skolemizes the quantified variables into rigid skolems and recurses.
+2. If the inferred type is polymorphic (`forall`), it instantiates the quantified variables into fresh flexible metas and recurses.
+3. If both sides are arrow types, it applies arrow subsumption (contravariant domain, covariant codomain).
+4. Otherwise, it falls back to structural unification.
 
 ## The Substitution Engine, `force`, and `zonk`
 
@@ -38,6 +45,8 @@ These meta-variables are resolved through a stateful substitution engine tracked
 ### Unification (`unify`)
 The `unify` function starts by `force`-ing both inputs, then walks the resulting types structurally. If it encounters a `TMeta`, it updates the `TCState` to bind that meta-variable to the other type, incrementally solving constraints.
 
+`TSkolem` nodes are rigid: they only unify with the exact same skolem identity. This is the mechanism that prevents invalid rank-2 instantiation through ordinary unification.
+
 ### Deep Resolution (`zonk`)
 Because the substitution map is updated incrementally, a meta-variable might point to another meta-variable, which points to a concrete type. 
 
@@ -49,8 +58,8 @@ You should use these operations for different purposes:
 
 ## Current Scope
 
-This branch now includes stateful substitution infrastructure, persistent REPL-level `TCState`, corrected deep resolution for displayed types, fresh-meta based inference/checking paths for previously unresolved lambda/application cases, and HM-style let-polymorphism (`generalize`/`instantiate`) for `let` bindings.
+This branch includes stateful substitution infrastructure, persistent REPL-level `TCState`, corrected deep resolution for displayed types, fresh-meta based inference/checking paths for previously unresolved lambda/application cases, HM-style let-polymorphism (`generalize`/`instantiate`) for `let` bindings, and initial rank-2-aware subsumption via skolemization/instantiation.
 
-`check` now routes its generic fallback through the `subsumes` bridge, but `subsumes` is still a direct wrapper around `unify` today. Rank-2 skolemization and richer `forall` handling in subsumption/unification remain future work.
+The rank-2 path is intentionally scoped to subsumption and rigid-skolem safety checks. Richer elaboration-oriented features (for example, macro-aware elaboration and deeper constraint systems beyond current unification/subsumption) remain future work.
 
 Generalized type variables are currently rendered using compiler-generated internal names in user output; this is a presentation choice and not the required surface syntax for user-written type signatures.
