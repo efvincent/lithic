@@ -8,8 +8,17 @@ Use `cabal` from the repository root:
 
 ```bash
 cabal build
+cabal test lithic-test
 cabal run lithic-cli
 ```
+
+Run the golden test suite explicitly:
+
+```bash
+cabal test lithic-test
+```
+
+Golden cases are discovered from `test/golden/*.lithic` and compared against matching `.golden` files.
 
 In the REPL:
 
@@ -31,5 +40,7 @@ In the REPL:
 
 - `src/Compiler/` contains compiler and REPL modules.
 - `app/Main.hs` wires executable startup.
+- `test/Main.hs` contains the Tasty golden test harness.
+- `test/golden/` contains discovered `.lithic` inputs and expected `.golden` outputs.
 - `cabal.project` configures local Cabal project behavior.
 - `lithic.cabal` defines package components and dependencies.

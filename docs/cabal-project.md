@@ -56,6 +56,12 @@ cabal run lithic-cli
 
 This launches the Brick-based REPL UI on the main thread.
 
+Run the golden test suite:
+
+```bash
+cabal test lithic-test
+```
+
 Load in REPL context:
 
 ```bash

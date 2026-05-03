@@ -1,5 +1,11 @@
 # Revision history for lithic
 
+## 0.5.1.0 -- 2026-05-02
+
+* Added `tasty` and `tasty-golden` test harness to lock in the Hindley-Milner typechecking baseline.
+* Added golden test cases for let-polymorphism, the occurs check, and comprehensive AST composition.
+* Updated README and `docs/cabal-project.md` with the `cabal test lithic-test` workflow and golden-test layout.
+
 ## 0.5.0.0 -- 2026-05-02
 
 * Added HM-style let-polymorphism in the bidirectional checker by generalizing inferred `let`-bound types and instantiating polymorphic bindings on variable lookup.
