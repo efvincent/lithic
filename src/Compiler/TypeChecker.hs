@@ -1,4 +1,3 @@
-{-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 module Compiler.TypeChecker where
 
 import Data.Text (Text)
@@ -17,7 +16,7 @@ import Bluefin.Exception (Exception, throw)
 import Bluefin.Reader (Reader, ask, runReader)
 import Bluefin.State (State, get, modify)
 
-import Compiler.AST (Expr(..), Type(..), SourceSpan, getTypeSpan, PathSegment (..), UpdateOp (..))
+import Compiler.AST (Expr(..), Type(..), SourceSpan, getTypeSpan, PathSegment (..), UpdateOp (..), getSpan)
 import Lens.Micro ((.~), (%~))
 import Data.Function ((&))
 
@@ -55,19 +54,6 @@ freshMeta sp st = do
   let mId = curSt.nextMeta
   modify st (#nextMeta .~ (mId + 1))
   pure $ TMeta sp mId
-
--- | Extract a span from an Expr to attach to localized errors.
-getSpan :: Expr -> SourceSpan
-getSpan = \case
-  Var sp _           -> sp
-  Lit sp _           -> sp
-  Lam sp _ _ _       -> sp
-  App sp _ _         -> sp
-  Let sp _ _ _       -> sp
-  Ann sp _ _         -> sp
-  RecEmpty sp        -> sp
-  RecExtend sp _ _ _ -> sp
-  RecSelect sp _ _   -> sp
 
 --------------------------------
 -- Typechecker implementation
