@@ -47,6 +47,32 @@ The `unify` function starts by `force`-ing both inputs, then walks the resulting
 
 `TSkolem` nodes are rigid: they only unify with the exact same skolem identity. This is the mechanism that prevents invalid rank-2 instantiation through ordinary unification.
 
+### Row Polymorphism and `TMeta` Expansion
+
+Lithic implements order-independent structural records via Row Polymorphism. When the typechecker needs to access a field inside a record (e.g., `\r -> r.x`), it doesn't immediately fail if the record's exact shape isn't known. Instead, it relies on a combination of **Row Shifting** and **Lazy `TMeta` Expansion**.
+
+When `infer` processes a record selection (`RecSelect`), it calls the `rewriteRow` helper. `rewriteRow` searches the record's type for the requested label. 
+
+The true power of this system emerges when `rewriteRow` encounters an open meta-variable (`TMeta`):
+1. **The Scenario:** A user writes `\r -> r.x`. The variable `r` is initially assigned a completely unconstrained meta-variable, say `?m1`.
+2. **The Search:** `rewriteRow` is asked to find the label `"x"` inside `?m1`.
+3. **The Expansion:** Because `?m1` is open, the typechecker safely assumes, *"If this code is valid, `?m1` must be a record containing at least an `"x"` field."*
+4. **The Mutation:** It generates two new meta-variables: `?fieldTy` and `?restRow`. It then binds `?m1` in the stateful substitution dictionary to `TRowExtend "x" ?fieldTy ?restRow`.
+
+By the time the function finishes checking, the type of `r` has organically grown from an unknown `?m1` into the polymorphic row type `{ x : ?fieldTy | ?restRow }`. If the user later accesses `r.y`, the `?restRow` meta-variable will seamlessly expand again to accommodate `"y"`.
+
+### Native Lens Update Typing (`RecUpdate`)
+
+Lens updates type-check by first resolving the target field through `resolvePath`, then validating the update operator against that field type.
+
+1. For `record.{ path := value }`, the checker infers `value` and unifies it with the resolved field type.
+2. For `record.{ path %= f }`, the checker requires `f` to unify with `fieldTy -> fieldTy`.
+3. The expression result type is the original record type, modeling functional update semantics at the type level.
+
+Current status note:
+1. Structural records (`TRecord` over row types) are supported now.
+2. Nominal-record path resolution is intentionally stubbed and currently returns a targeted type error.
+
 ### Deep Resolution (`zonk`)
 Because the substitution map is updated incrementally, a meta-variable might point to another meta-variable, which points to a concrete type. 
 
@@ -58,7 +84,7 @@ You should use these operations for different purposes:
 
 ## Current Scope
 
-This branch includes stateful substitution infrastructure, persistent REPL-level `TCState`, corrected deep resolution for displayed types, fresh-meta based inference/checking paths for previously unresolved lambda/application cases, HM-style let-polymorphism (`generalize`/`instantiate`) for `let` bindings, and initial rank-2-aware subsumption via skolemization/instantiation.
+This branch includes stateful substitution infrastructure, persistent REPL-level `TCState`, corrected deep resolution for displayed types, fresh-meta based inference/checking paths for previously unresolved lambda/application cases, HM-style let-polymorphism (`generalize`/`instantiate`) for `let` bindings, initial rank-2-aware subsumption via skolemization/instantiation, and initial structural row-polymorphism plus lens-update checking for records.
 
 The rank-2 path is intentionally scoped to subsumption and rigid-skolem safety checks. Richer elaboration-oriented features (for example, macro-aware elaboration and deeper constraint systems beyond current unification/subsumption) remain future work.
 

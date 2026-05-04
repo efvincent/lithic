@@ -1,0 +1,2 @@
+[AST] Let [1,1]..[2,10] "r" (RecExtend [1,9]..[1,44] "x" (Lit [1,15]..[1,15] 1) (RecExtend [1,9]..[1,44] "nested" (RecExtend [1,27]..[1,42] "y" (Lit [1,33]..[1,33] 2) (RecExtend [1,27]..[1,42] "z" (Lit [1,40]..[1,40] 3) (RecEmpty [1,42]..[1,42]))) (RecEmpty [1,44]..[1,44]))) (RecSelect [2,1]..[2,10] (RecSelect [2,1]..[2,8] (Var [2,1]..[2,1] "r") "nested") "z")
+[Type] TInt [1,40]..[1,40]

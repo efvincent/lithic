@@ -1,5 +1,29 @@
 # Revision history for lithic
 
+## 0.7.0.0 -- 2026-05-04
+
+* Added initial row-polymorphism surface and type-level machinery:
+	* `TRowEmpty` / `TRowExtend` and `TRecord` in the type AST,
+	* record expression forms `RecEmpty`, `RecExtend`, and `RecSelect` in the term AST,
+	* initial lens-style update node `RecUpdate` with `PathSegment` and `UpdateOp`.
+* Extended lexer coverage for record and lens syntax:
+	* record tokens (`{`, `}`, `,`, `|`),
+	* lens operators (`:=`, `%=`).
+* Extended Pratt parsing to support:
+	* record literals (`{ x = 1, y = 2 }`),
+	* row-tail record forms (`{ x = 1 | rest }`),
+	* field selection (`record.field`),
+	* native lens updates (`record.{ a.b := v }`, `record.{ a %= f }`).
+* Added row-aware unification and path-resolution support in the typechecker:
+	* row rewriting/label extraction (`rewriteRow`),
+	* open-row meta expansion during field access,
+	* record-selection inference,
+	* lens update checking for both set (`:=`) and modify (`%=`) operators.
+* Added golden coverage for row-polymorphism and lens behavior:
+	* positive: `record-basic`, `row-shift`, `lens-set`, `lens-modify`,
+	* negative: `fail-missing-field`, `fail-strict-record-mismatch`, `fail-lens-set-type`, `fail-lens-mod-type`.
+* Synced documentation (`README.md`, `docs/typechecker.md`, `docs/project-plan.md`, `.github/copilot-instructions.md`) with current parser/typechecker behavior and roadmap state.
+
 ## 0.6.0.0 -- 2026-05-03
 
 * Added initial rank-2 subsumption support in the bidirectional checker by expanding `subsumes` with:

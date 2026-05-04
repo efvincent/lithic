@@ -1,0 +1,2 @@
+let f = \r => r.x in
+f { y = 1 }

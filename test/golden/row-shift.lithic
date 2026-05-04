@@ -1,0 +1,6 @@
+let f = \r => r.x in
+let r1 = { x = 1, y = 2 } in
+let r2 = { y = 99, x = 42 } in
+let a = f r1 in
+let b = f r2 in
+b

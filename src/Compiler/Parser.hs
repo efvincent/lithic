@@ -11,14 +11,16 @@ import Bluefin.Eff ((:>), Eff, runPureEff)
 import Bluefin.State (State, get, put, runState)
 import Bluefin.Exception (Exception, throw, try)
 
-import Compiler.AST (Expr(..), SourceSpan(..), Type (..), getTypeSpan, getSpan)
+import Compiler.AST 
 import Compiler.Lexer (Token(..), TokenClass(..))
 
--- | Precedence levels for lithic operators, from loosest to tightest binding
+-- | Defines the binding power (precedence) of operators and expressions 
+-- during Pratt parsing. Higher values bind more tightly.
 data Precedence
-  = PrecLowest
-  | PrecAnn     -- expr : Type
-  | PrecApp     -- Function application (f x)
+  = PrecLowest   -- ^ Base precedence for standard expressions
+  | PrecAnn      -- ^ Type annotations (e.g., @expr : Type@)
+  | PrecApp      -- ^ Function application (e.g., @f x@)
+  | PrecSelect   -- ^ Record field selection (e.g., @record.x@)
   deriving (Eq, Ord, Show, Generic)
 
 -- | Helper to map Precedence to an integer for Pratt comparison logic
@@ -27,6 +29,7 @@ precVal = \case
   PrecLowest -> 0
   PrecAnn    -> 5
   PrecApp    -> 30
+  PrecSelect -> 40
 
 data ParseError = MkParseError
   { msg   :: !Text
@@ -76,8 +79,62 @@ peekPrecedence st = do
       TokLet      -> precVal PrecApp
       TokLam      -> precVal PrecApp
       TokColon    -> precVal PrecAnn
+      -- A left brace starts a record, parsing with application-level precedence
+      TokLBrace   -> precVal PrecApp
+      -- A dot indicates a record seelection, binding very tightly
+      TokDot      -> precVal PrecSelect
       _           -> precVal PrecLowest
 
+-- | Recursively parses the interior fields of a record definition
+-- Handles standard fields separated by commas, and row extensions 
+-- indicated by a pipe.
+--
+-- For example, parses: {x = 1, y = 2 | rest}
+-- and correctly merges `SourceSpan` boundaries as it builds the AST.
+parseRecordFields
+  :: forall st ex es. (st :> es, ex :> es)
+  => SourceSpan -> State ParserState st -> Exception ParseError ex -> Eff es Expr
+parseRecordFields startSpan st ex = do
+  label <- expectIdent st ex
+  expect TokAssign st ex
+  val <- parseExpr (precVal PrecLowest) st ex
+  mNext <- advance st
+  case mNext of
+    -- Another field
+    Just t | t.cls == TokComma -> do
+      rest <- parseRecordFields startSpan st ex
+      pure $ RecExtend (mergeSpan startSpan (getSpan rest)) label val rest
+    -- Row extension
+    Just t | t.cls == TokPipe -> do
+      rest <- parseExpr (precVal PrecLowest) st ex
+      endTok <- advance st
+      case endTok of
+        Just e | e.cls == TokRBrace ->
+          pure $ RecExtend (mergeSpan startSpan e.span) label val rest
+        _ -> throw ex (MkParseError "Expected '}' after row extension" startSpan)
+    -- End of record
+    Just t | t.cls == TokRBrace -> do
+      let emptyRec = RecEmpty t.span
+      pure $ RecExtend (mergeSpan startSpan t.span) label val emptyRec
+
+    _ -> throw ex (MkParseError "Expected ',', '|', or '}' in record" startSpan)
+
+-- | Parses a dot-separated list of path segments for deep record updates
+parsePathSegments
+  :: forall st ex es. (st :> es, ex :> es)
+  => State ParserState st -> Exception ParseError ex -> Eff es [PathSegment]
+parsePathSegments st ex = do
+  -- currently only PathField is supported, so we expect an identifier
+  label <- expectIdent st ex
+  let segment = PathField label
+  next <- peek st
+  case next of
+    Just t | t.cls == TokDot -> do
+      _ <- advance st -- Consume the dot
+      rest <- parsePathSegments st ex
+      pure (segment : rest)
+    _ -> pure [segment]
+    
 -- | Pushes a token back onto the front of the stream.
 pushBack :: forall st es. (st :> es) => Token -> State ParserState st -> Eff es ()
 pushBack tok st = do
@@ -200,6 +257,16 @@ parseNud tok st ex =
       -- but returning the inner expr is standard for an AST.
       pure expr
     
+    -- | Parses record construction. Handles both empty records `{}`
+    -- and populated records `{x = 1}`.
+    TokLBrace -> do
+      next <- peek st
+      case next of
+        Just t | t.cls == TokRBrace -> do
+          _ <- advance st   -- consume `}`
+          pure $ RecEmpty (mergeSpan tok.span t.span)
+        _ -> parseRecordFields tok.span st ex
+
     TokLam -> do
       xTok <- expectIdent st ex
 
@@ -230,15 +297,48 @@ parseNud tok st ex =
       throw ex (MkParseError ("Unexpected token in expression position: " 
       <> T.pack (show tok.cls)) tok.span)
 
--- | Parses tokens that operate on the expression immediately to their left (Infix/Application).
+-- | Parses tokens that operate on the expression immediately to their 
+-- left (Infix/Application).
 parseLed 
   :: forall st ex es. (st :> es, ex :> es) 
   => Expr -> Token -> State ParserState st -> Exception ParseError ex -> Eff es Expr
 parseLed left tok st ex = case tok.cls of
+  
   TokColon -> do
     ty <- parseType st ex
     pure $ Ann (mergeSpan (getSpan left) (getTypeSpan ty)) left ty
 
+  -- | Parses record selection (record.x) OR deep updates (record.{ x.y := 42 })
+  TokDot -> do
+    nextTok <- advance st
+    case nextTok of
+      -- 1. Standard Record Selection
+      Just t | TokIdent label <- t.cls ->
+        pure $ RecSelect (mergeSpan (getSpan left) t.span) left label
+      
+      -- 2. Native Lens Deep update
+      Just t | t.cls == TokLBrace -> do
+        -- Parse the target path
+        path <- parsePathSegments st ex
+        -- Parse the operator
+        opTok <- advance st
+        updateOp <- case opTok of
+          Just o | o.cls == TokLensSet -> pure OpSet
+          Just o | o.cls == TokLensMod -> pure OpModify
+          Just badOp -> throw ex $ MkParseError "Expected ':=' or '%=' after lens path" badOp.span
+          Nothing -> throw ex $ MkParseError "Unexpected EOF in lens update" (getSpan left)
+        -- Parse the new value / modifier function
+        val <- parseExpr (precVal PrecLowest) st ex
+        -- Consume the closing brace
+        rbraceTok <- advance st
+        case rbraceTok of
+          Just endT | endT.cls == TokRBrace -> 
+            pure $ RecUpdate (mergeSpan (getSpan left) endT.span) left path updateOp val
+          Just badEnd -> throw ex $ MkParseError "Expected '}' to close lens update block" badEnd.span
+          Nothing -> throw ex $ MkParseError "Unexpected EOF looking for '}'" (getSpan left)
+      Just badTok -> throw ex $ MkParseError "Expected identifier or '{' after '.'" badTok.span
+      Nothing -> throw ex $ MkParseError "Unexpected EOF after '.'" (getSpan left)
+  
   -- If we see a token that starts an expression, it is an implicit application.
   -- We push it back so `parseExpr` can consume it naturally as a NUD.
   cls | isAppStarter cls -> do
@@ -255,6 +355,7 @@ parseLed left tok st ex = case tok.cls of
       TokLParen   -> True
       TokLet      -> True
       TokLam      -> True
+      TokLBrace   -> True
       _           -> False
 
 -- | Pure entry point for the Parser.
