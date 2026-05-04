@@ -1,0 +1,3 @@
+let state = { player = { stats = { hp = 100 } } } in
+let newState = state.{ player.stats.hp := 99 } in
+newState

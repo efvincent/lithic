@@ -2,6 +2,8 @@
 
 Lithic is a Haskell project for experimenting with a small compiler pipeline and an interactive REPL. The current executable, `lithic-cli`, launches a Brick-based terminal UI that reads expressions, lexes and parses them, and then runs bidirectional type inference/checking backed by a stateful unification engine to print either inferred types or typed diagnostics.
 
+This branch also includes initial structural-record row polymorphism and native lens-style record updates.
+
 ## Quick Start
 
 Use `cabal` from the repository root:
@@ -23,10 +25,31 @@ Golden cases are discovered from `test/golden/*.lithic` and compared against mat
 In the REPL:
 
 - Enter an expression such as `42`, `\x => x`, `\x : Int => x`, or `let id = \x => x in id 5`.
+- Record expressions and selections are supported, for example `{ x = 1, y = 2 }` and `r.x`.
+- Lens-style updates are supported with `:=` (set) and `%=` (modify), for example `state.{ player.hp := 99 }` and `state.{ score %= \s => s }`.
 - Successful input is rendered as two lines: `[AST] <show ast>` followed by `[Type] <show type>`.
 - Lexing, parsing, and type errors are shown inline in the same pane.
 - Press Enter to submit the current editor contents.
 - Enter `:quit` or press Ctrl-C to exit the session.
+
+## Record and Lens Examples
+
+```haskell
+let f = \r => r.x in
+let r1 = { x = 1, y = 2 } in
+let r2 = { y = 99, x = 42 } in
+f r2
+```
+
+```haskell
+let state = { player = { stats = { hp = 100 } } } in
+state.{ player.stats.hp := 99 }
+```
+
+```haskell
+let r = { x = 1 } in
+r.{ x %= \v => 99 }
+```
 
 ## Documentation Index
 
@@ -37,6 +60,8 @@ In the REPL:
 - [Rank-2 Types and Skolemization](docs/higher-rank-types.md) gives a deeper conceptual treatment of higher-rank polymorphism, why rank-2 requires top-down checking, and how rigid skolems protect soundness.
 - [Project Plan and Architecture Record](docs/project-plan.md) captures the longer-term language vision, locked-in architectural decisions, and the current phase roadmap.
 - [Optimizations and Technical Debt](docs/optimizations.md) describes performance bottlenecks and issues to be addressed in the future.
+
+For concrete runnable behavior snapshots, inspect the golden tests under `test/golden/`, especially `record-basic`, `row-shift`, `lens-set`, `lens-modify`, and the corresponding negative tests.
 
 ## How To Read The Docs
 

@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 module Compiler.TypeChecker where
 
 import Data.Text (Text)
@@ -16,7 +17,7 @@ import Bluefin.Exception (Exception, throw)
 import Bluefin.Reader (Reader, ask, runReader)
 import Bluefin.State (State, get, modify)
 
-import Compiler.AST (Expr(..), Type(..), SourceSpan, getTypeSpan)
+import Compiler.AST (Expr(..), Type(..), SourceSpan, getTypeSpan, PathSegment (..), UpdateOp (..))
 import Lens.Micro ((.~), (%~))
 import Data.Function ((&))
 
@@ -58,12 +59,15 @@ freshMeta sp st = do
 -- | Extract a span from an Expr to attach to localized errors.
 getSpan :: Expr -> SourceSpan
 getSpan = \case
-  Var sp _     -> sp
-  Lit sp _     -> sp
-  Lam sp _ _ _ -> sp
-  App sp _ _   -> sp
-  Let sp _ _ _ -> sp
-  Ann sp _ _   -> sp
+  Var sp _           -> sp
+  Lit sp _           -> sp
+  Lam sp _ _ _       -> sp
+  App sp _ _         -> sp
+  Let sp _ _ _       -> sp
+  Ann sp _ _         -> sp
+  RecEmpty sp        -> sp
+  RecExtend sp _ _ _ -> sp
+  RecSelect sp _ _   -> sp
 
 --------------------------------
 -- Typechecker implementation
@@ -152,6 +156,45 @@ infer st env ex expr =
       runReader newEnv \newEnvHandle ->
         infer st newEnvHandle ex body
 
+    -- ------- RECORD EXPRESSIONS --------
+    
+    -- 1. Empty Record
+    RecEmpty sp -> pure $ TRecord sp (TRowEmpty sp)
+
+    -- 2. Record Extension
+    RecExtend sp label val rest -> do
+      valTy <- infer st env ex val
+      restTy <- infer st env ex rest
+      -- Ensure the 'rest' is actually a TRecord, then bind its inner row
+      rowMeta <- freshMeta sp st
+      unify st ex restTy (TRecord sp rowMeta) sp
+      pure $ TRecord sp (TRowExtend sp label valTy rowMeta)
+    
+    -- 3. Record Selection (aka a 1-step lens path)
+    RecSelect sp record label -> do
+      recTy <- infer st env ex record
+      resolvePath st ex sp recTy [PathField label]
+
+    -- 4. Native Lenses
+    RecUpdate sp record path op valExpr -> do
+      -- Compute type of the base record
+      recTy <- infer st env ex record
+      -- Walk the path to find the exact type of the deeply nested field
+      targetTy <- resolvePath st ex sp recTy path
+
+      case op of
+        OpSet -> do
+          -- For `:=` the right hand side must match the field type exactly
+          valTy <- infer st env ex valExpr
+          unify st ex targetTy valTy sp
+        OpModify -> do
+          -- For `%=`, the right hand side must be a function of type targetTy -> targetTy
+          valTy <- infer st env ex valExpr
+          expectedFuncTy <- pure $ TArrow sp targetTy targetTy
+          unify st ex expectedFuncTy valTy sp
+      -- Functional updates are non-destructive; the expression returns the base record's type
+      pure recTy
+      
 -- | Check that an expression satisfies an expected type.
 check 
   :: forall st env ex es. (st :> es, env :> es, ex :> es) 
@@ -256,6 +299,9 @@ zonk st ty = do
   case forcedTy of
     TArrow sp p r -> TArrow sp <$> zonk st p <*> zonk st r
     TForall sp vars inner -> TForall sp vars <$> zonk st inner
+    TRowExtend sp label fieldTy rest ->
+      TRowExtend sp label <$> zonk st fieldTy <*> zonk st rest
+    TRecord sp rowTy -> TRecord sp <$> zonk st rowTy
     _ -> pure forcedTy
 
 -- | Unify tow types, updating the substitution state if necessary.
@@ -283,9 +329,99 @@ unify st ex t1 t2 sp = do
       unify st ex r1 r2 sp
 
     (TVar _ a, TVar _ b) | a == b -> pure ()
+
+    -- ---- ROW POLYMORPHISM RULES ----    
+    (TRowEmpty _, TRowEmpty _) -> pure ()
+
+    -- The core row-shifting logic
+    (TRowExtend _ label1 rTy1 rest1, row2@(TRowExtend _ _ _ _)) -> do
+      (rTy2, rest2) <- rewriteRow st ex sp label1 row2
+      unify st ex rTy1  rTy2  sp
+      unify st ex rest1 rest2 sp
     
+    -- Catch structural mismatches for better error reporting
+    (TRowEmpty _, TRowExtend _ label _ _) ->
+      throw ex $ MkTypeError 
+        ("Record shape mismatch: one side requires field '" 
+        <> label 
+        <> "', but the other is a closed record without it.") sp
+
+    (TRowExtend _ label _ _, TRowEmpty _) ->
+      throw ex $ MkTypeError 
+        ("Record shape mismatch: one side requires field '" 
+        <> label 
+        <> "', but the other is a closed record without it.") sp
+
+    -- -----------------------------------
+
+    (TRecord _ row1, TRecord _ row2) -> do
+      unify st ex row1 row2 sp
+
+    (TNominal _ n1, TNominal _ n2) | n1 == n2 -> pure () 
+
     _ -> throw ex $
       MkTypeError ("Cannot unify " <> T.pack (show ty1) <> " with " <> T.pack (show ty2)) sp
+
+-- | Searches a row for a specific label.
+-- If found, returns the fields' type and the remaining row without that field.
+-- If it hits an open meta-variable, it safely expands the row to include the label.
+rewriteRow
+  :: forall st ex es. (st :> es, ex :> es)
+  => State TCState st
+  -> Exception TypeError ex
+  -> SourceSpan
+  -> Text -> Type -> Eff es (Type, Type)
+rewriteRow st ex sp targetLabel rowTy = do
+  forcedRow <- force st rowTy
+  case forcedRow of
+    TRowEmpty _ ->
+      throw ex $ MkTypeError ("Row unification failed: missing field '" <> targetLabel <> "'") sp
+    TRowExtend rowSp label fieldTy restRow ->
+      if targetLabel == label
+      then pure (fieldTy, restRow)
+      else do
+        -- Not a match, shift the target label further down the row
+        (foundTy, remainingRest) <- rewriteRow st ex sp targetLabel restRow
+        -- Rebuild the current field on top of the newly stripped remainder
+        pure (foundTy, TRowExtend rowSp label fieldTy remainingRest)
+    TMeta mSp mId -> do
+      -- We hit the end of an open record. Expand it to accommodate the target label.
+      newFieldTy <- freshMeta mSp st
+      newRestRow <- freshMeta mSp st
+      bindMeta st ex mId (TRowExtend mSp targetLabel newFieldTy newRestRow) sp
+      pure (newFieldTy, newRestRow)
+    _ -> throw ex $ MkTypeError ("expected a row type, but got: " <> T.pack (show forcedRow)) sp
+
+-- | Traverses a deep update path to extract the final targeted field type.
+-- Handles both structural records (by unwrapping TRecord and shifting rows) and
+-- nominal records (stubbed for future module environment lookup).
+resolvePath
+  :: forall st ex es. (st :> es, ex :> es)
+  => State TCState st -> Exception TypeError ex -> SourceSpan -> Type -> [PathSegment] -> Eff es Type
+resolvePath st ex sp baseTy = \case
+  [] -> pure baseTy
+  (PathField label : restPath) -> do
+    forcedBase <- force st baseTy
+    case forcedBase of
+      -- Mode A: structural record
+      TRecord _ rowTy -> do
+        (fieldTy, _) <- rewriteRow st ex sp label rowTy
+        resolvePath st ex sp fieldTy restPath
+      -- Mode B: Nominal record
+      TNominal _ name ->
+        -- In Phase 6 (Modules), we will look up 'name' in the environment to get its struct fields
+        throw ex $ MkTypeError ("Lens updates for Nominal type '" <> name <> "' are not yet implemented.") sp
+      -- Open Meta-Variable Expansion 
+      TMeta mSp mId -> do
+        -- If it's an unconstrained meta, assume it's a TRecord containing an open row
+        rowMeta <- freshMeta mSp st
+        bindMeta st ex mId (TRecord mSp rowMeta) sp
+        -- Now extract the field from the newly expanded row
+        (fieldTy, _) <- rewriteRow st ex sp label rowMeta
+        resolvePath st ex sp fieldTy restPath
+      _ -> throw ex $ MkTypeError "Expected a record type for path selection." sp
+      
+    
 
 -- | Bind a meta-variable, ensuring it doesn't create infinite types (occurs check).
 bindMeta
@@ -310,6 +446,10 @@ occurs st mId ty = do
     TArrow _ p r -> do
       pOccurs <- occurs st mId p
       if pOccurs then pure True else occurs st mId r
+    TRowExtend _ _ fieldTy rest -> do
+      fieldOccurs <- occurs st mId fieldTy
+      if fieldOccurs then pure True else occurs st mId rest
+    TRecord _ rowTy -> occurs st mId rowTy
     _ -> pure False
 
 -- | instantiates a polymorphic type by replaceing its quantified variables
@@ -352,6 +492,9 @@ replaceMetas nameMap ty =
         Nothing   -> ty
     TArrow sp p r -> TArrow sp (replaceMetas nameMap p) (replaceMetas nameMap r)
     TForall sp vars inner -> TForall sp vars (replaceMetas nameMap inner)
+    TRowExtend sp label fieldTy rest ->
+      TRowExtend sp label (replaceMetas nameMap fieldTy) (replaceMetas nameMap rest)
+    TRecord sp rowTy -> TRecord sp (replaceMetas nameMap rowTy)
     _ -> ty
 
 -- | replaces bound type variables (TVar) with their instantiated concrete types.
@@ -367,6 +510,9 @@ subBound subMap ty =
       -- If a nested forall shadows a variable, remove it from the active substitution map
       let subMap' = foldr Map.delete subMap vars
       in TForall sp vars (subBound subMap' innerTy)
+    TRowExtend sp label fieldTy rest ->
+      TRowExtend sp label (subBound subMap fieldTy) (subBound subMap rest)
+    TRecord sp rowTy -> TRecord sp (subBound subMap rowTy)
     _ -> ty -- Catches TMeta and TSkolem
     
 -- | Generate a fresh rigit skolem constant
@@ -403,7 +549,12 @@ ftvType st ty = do
       pVars <- ftvType st p
       rVars <- ftvType st r 
       pure $ IS.union pVars rVars
+    TRowExtend _ _ fieldTy rest -> do
+      fieldVars <- ftvType st fieldTy
+      restVars <- ftvType st rest
+      pure $ IS.union fieldVars restVars
     TForall _ _ inner -> ftvType st inner
+    TRecord _ rowTy -> ftvType st rowTy
     _ -> pure IS.empty
 
 -- | Collects all unbound meta-variable IDs across the entire lexical environment

@@ -29,6 +29,13 @@ data TokenClass
   | TokForall       -- ^ `forall` operator
   | TokDot          -- ^ `.` operator
   | TokEOF
+  | TokLBrace       -- ^ {
+  | TokRBrace       -- ^ }
+  | TokComma        -- ^ ,
+  | TokPipe         -- ^ |
+  | TokLensSet      -- ^ Record Lens assignment operator `:=`
+  | TokLensMod      -- ^ Record Lens Modification operator `%=`
+  
   deriving (Show, Eq, Generic)
 
 -- | A complete token, pairing its syntactic class with its exact source location
@@ -72,12 +79,38 @@ scanTokens st ex = loop []
         mc <- advance st
         case mc of 
           -- Single character operators
-          Just ':'  -> emit TokColon startSt acc
           Just '\\' -> emit TokLam startSt acc
           Just '('  -> emit TokLParen startSt acc
           Just ')'  -> emit TokRParen startSt acc
           Just '.'  -> emit TokDot startSt acc
           Just '∀'  -> emit TokForall startSt acc
+          Just '{'  -> emit TokLBrace startSt acc
+          Just '}'  -> emit TokRBrace startSt acc
+          Just ','  -> emit TokComma startSt acc
+          Just '|'  -> emit TokPipe startSt acc
+
+          Just ':'  -> do
+            next <- peek st
+            case next of 
+              Just '=' -> do
+                _ <- advance st
+                emit TokLensSet startSt acc
+                -- if it's just a colon, emith the standard type annotation token
+                -- adjust `TokColon` to whatever you current call it
+              _ -> emit TokColon startSt acc
+
+          Just '%' -> do
+            next <- peek st
+            case next of 
+              Just '=' -> do
+                _ <- advance st 
+                emit TokLensMod startSt acc
+                -- TODO: support modulo with %
+              _ -> 
+                throw ex $ 
+                MkLexError "Unexpected character '%'. Did you mean %= for lens update?" 
+                  startSt.line startSt.col
+
 
           -- Two character `=>` requires a lookahead, with fallback to `=`
           Just '=' -> do
@@ -95,7 +128,10 @@ scanTokens st ex = loop []
               Just '>' -> do
                 _ <- advance st
                 emit TokArrow startSt acc
-              _ -> throw ex (MkLexError ("Unexpected character '-'. Did you mean '->'?") startSt.line startSt.col)
+              _ -> 
+                throw ex $ 
+                MkLexError "Unexpected character '-'. Did you mean '->'?" 
+                  startSt.line startSt.col
           
           -- Identifiers and keywords
           Just c | isAlpha c -> do

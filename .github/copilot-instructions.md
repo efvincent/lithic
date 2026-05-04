@@ -20,11 +20,13 @@ Keep phases highly decoupled and preserve clear subsystem boundaries.
 
 2. Parsing (Pratt Parser) — **COMPLETED**:
    - Top-down operator precedence (Pratt) with explicit NUD/LED (null/left denotation) structure.
-   - Precedence model: `PrecLowest` (0), `PrecAnn` (5), `PrecApp` (30).
+  - Precedence model: `PrecLowest` (0), `PrecAnn` (5), `PrecApp` (30), `PrecSelect` (40).
    - Juxtaposition is implicit application (e.g., `f x` parses as `App f x`).
    - Let-binding RHS parses with `PrecLowest` to capture full expressions including type annotations.
    - Lambda bodies parse with `PrecLowest` to allow all valid term-level constructs.
    - Type annotations in expression position via `:` operator (e.g., `x : Int`, `\p : a -> b => p`).
+  - Record literals and selection are supported: `{ x = 1 }`, `r.x`.
+  - Native lens update syntax is supported for field paths: `r.{ x := 1 }`, `r.{ x %= f }`.
    - Application is right-associative at LED; parser uses pushback pattern to avoid left-recursion.
    - Pure entry point: `runParser :: [Token] -> Either ParseError Expr`.
    - Parser is frontend-agnostic; does not perform type checking, elaboration, or evaluation.
@@ -83,6 +85,9 @@ Keep phases highly decoupled and preserve clear subsystem boundaries.
 - **Let-bindings:** `let x = e1 in e2` where e1 may include annotations: `let x = e : T in e2`
 - **Implicit application:** Juxtaposition binds tightly (precedence 30): `f x y` parses as `(f x) y`
 - **Type annotations:** `expr : Type` (precedence 5, lower than application)
+- **Records (structural):** `{ x = e, y = e2 }`, with row-tail form `{ x = e | rest }`
+- **Field selection:** `record.field` (binds tighter than application)
+- **Lens updates:** `record.{ a.b := value }` and `record.{ a.b %= fn }`
 - **Data constructors:** Uppercase identifiers in term position (e.g., `True`, `Just x`, `Left y`) are reserved for future ADT support; currently parse as variables
 
 ### Type-Level Syntax

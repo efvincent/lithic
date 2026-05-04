@@ -1,0 +1,3 @@
+let data = { value = 42 } in
+let updated = data.{ value %= \v => 99 } in
+updated

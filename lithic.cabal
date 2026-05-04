@@ -1,6 +1,6 @@
 cabal-version:      3.4
 name:               lithic
-version:            0.6.0.0
+version:            0.7.0.0
 build-type:         Simple
 license:            NONE
 author:             Eric Vincent (arch)
