@@ -115,11 +115,14 @@ Use this checklist in PR descriptions whenever lexer/parser/typechecker behavior
 ### 🚧 Phase 7: Pattern Exhaustiveness & Reachability (CURRENT)
 * **Objective:** Implement Luc Maranget's Pattern Matrix decision tree algorithm to make non-exhaustive patterns and unreachable code hard compiler errors.
 * **Tasks:**
-  * [ ] Scaffold `Compiler.PatternMatch` module.
-  * [ ] Implement Matrix and Occurrence data structures.
-  * [ ] Implement `specialize` and `default` matrix decomposition functions.
-  * [ ] Wire exhaustiveness checking into the bidirectional `Case` evaluation.
-  * [ ] Upgrade `docs/language-spec.md` with formalized pattern-coverage and redundancy judgments once implementation stabilizes.
+  * [x] Scaffold `Compiler.PatternMatch` module.
+  * [x] Implement Matrix and Occurrence data structures (interim slice).
+  * [x] Implement `specialize` and `default` matrix decomposition functions.
+  * [x] Wire exhaustiveness checking into the bidirectional `Case` evaluation.
+  * [x] Add regression coverage for open-variant row behavior (`open-variant-redundancy`).
+  * [x] Upgrade `docs/language-spec.md` with interim pattern-coverage and redundancy boundary notes.
+  * [ ] Complete open-universe usefulness/redundancy algorithm so unreachable-branch checks are enforced beyond finite constructor universes.
+  * [ ] Promote Phase-7 addendum from provisional to fully normative once open-universe redundancy handling stabilizes.
 
 ### 📅 Phase 8: Evaluation Semantics (Interpreter)
 * **Objective:** Build an internal evaluator to actually execute Lithic code.
