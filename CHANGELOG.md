@@ -1,5 +1,17 @@
 # Revision history for lithic
 
+## 0.8.1.0 -- 2026-05-06
+
+* Added `docs/language-spec.md` as a normative living core language specification to prevent semantic drift during active phase work.
+* Added a concrete Phase-7 addendum template in `docs/language-spec.md` for matrix definitions, exhaustiveness/usefulness judgments, diagnostics contracts, and golden-test obligations.
+* Prefilled the Phase-7 addendum with a Maranget-aligned provisional draft covering matrix objects, specialization/default behavior, witness policy, redundancy diagnostics, and integration touch points.
+* Defined a formal anti-drift documentation policy requiring spec updates in the same change as parser/typechecker-visible behavior changes.
+* Added a lightweight semantic-change PR checklist to `docs/project-plan.md` to enforce spec-sync and golden coverage in review workflow.
+* Synced documentation pointers and governance notes across:
+	* `README.md` (documentation index and reading order)
+	* `docs/project-plan.md` (active anti-drift discipline and post-Phase-7 formalization checkpoint)
+	* `.github/copilot-instructions.md` (documentation expectations)
+
 ## 0.8.0.0 -- 2026-05-05
 
 * Extended literals across lexer/parser/AST/typechecker:

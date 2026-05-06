@@ -138,6 +138,7 @@ Keep phases highly decoupled and preserve clear subsystem boundaries.
 ## Documentation Expectations
 
 - Keep `README.md` aligned with actual executable behavior. Include example REPL sessions that reflect current syntax.
+- Treat `docs/language-spec.md` as the normative living core spec for currently implemented syntax/typing behavior; update it in the same change as any parser/typechecker-visible semantic delta.
 - Keep `docs/` content aligned with implementation details when architecture or behavior changes.
 - Update docs whenever commands, controls, output formats, or workflow expectations change.
 - When preparing a branch for PR: update version number in `lithic.cabal`, add detailed entry to `CHANGELOG.md` with all phase deliverables, and ensure `copilot-instructions.md` reflects current architecture and grammar decisions.
