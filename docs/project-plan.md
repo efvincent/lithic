@@ -40,6 +40,25 @@ The standard lifecycle of a Phase is:
 3.  **Check Correctness:** Write positive and negative `.lithic` golden tests.
 4.  **Review & Merge:** Lock in the baseline.
 
+### Anti-Drift Spec Discipline (Active)
+To prevent semantic drift during rapid feature work, `docs/language-spec.md` is now the normative living core spec for implemented syntax and static semantics.
+
+Required in any behavior-changing parser/typechecker change:
+1. Update `docs/language-spec.md` in the same change.
+2. Update `README.md` user-facing examples/contracts if external behavior changed.
+3. Update fixtures/golden snapshots if observable output changed.
+4. Keep this roadmap aligned when phase scope or semantic commitments shift.
+
+### PR Checklist (Semantic Changes)
+Use this checklist in PR descriptions whenever lexer/parser/typechecker behavior changes.
+
+- [ ] Updated `docs/language-spec.md` in the same change.
+- [ ] Updated user-facing behavior notes/examples in `README.md` if externally visible behavior changed.
+- [ ] Added or updated `test/fixtures/*.lithic` and `test/golden/*.golden` coverage for the semantic delta.
+- [ ] Confirmed diagnostics preserve precise spans for new/changed failure paths.
+- [ ] Updated roadmap/docs guidance (`docs/project-plan.md` and/or `.github/copilot-instructions.md`) if phase scope or grammar commitments changed.
+- [ ] Added a `CHANGELOG.md` entry summarizing the semantic/documentation delta.
+
 ## 4. Phase Tracker & Roadmap
 
 ### ✅ Phase 1: The Monomorphic Core
@@ -99,10 +118,17 @@ The standard lifecycle of a Phase is:
   * [ ] Implement Matrix and Occurrence data structures.
   * [ ] Implement `specialize` and `default` matrix decomposition functions.
   * [ ] Wire exhaustiveness checking into the bidirectional `Case` evaluation.
+  * [ ] Upgrade `docs/language-spec.md` with formalized pattern-coverage and redundancy judgments once implementation stabilizes.
 
 ### 📅 Phase 8: Evaluation Semantics (Interpreter)
 * **Objective:** Build an internal evaluator to actually execute Lithic code.
 * **Tasks:** Experiment with and implement either strict or lazy semantics, evaluating the trade-offs of a small-step vs. big-step evaluator.
+
+### Formalization Checkpoint (Post-Phase 7)
+After Phase 7 reaches implementation stability, produce a fuller language specification pass that expands beyond the current living core spec:
+1. Formal pattern matrix coverage/reachability rules.
+2. Surface-to-Core elaboration relation and boundaries.
+3. Clear split between normative implemented semantics and planned semantics.
 
 ### 📅 Phase 9: Rich REPL Experience & Lexical Enhancements
 * **Objective:** Continue improving the interactive environment and finalize front-end ergonomic parsing features.
