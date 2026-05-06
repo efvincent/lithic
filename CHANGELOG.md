@@ -1,5 +1,28 @@
 # Revision history for lithic
 
+## 0.8.0.0 -- 2026-05-05
+
+* Extended literals across lexer/parser/AST/typechecker:
+	* Added literal forms for `Int`, `Float`, `String`, and `Bool`.
+	* Added lexer support for quoted string tokens and boolean keywords (`True`, `False`).
+* Added arithmetic surface support:
+	* Prefix unary minus (`-x`).
+	* Infix subtraction (`x - y`) with explicit Pratt precedence.
+	* Line comments via `-- ...` in the lexer.
+* Added variant and pattern-matching foundations:
+	* New AST forms for `Pattern`, `Case`, and `Variant`.
+	* Parser support for `case ... of | pat => expr` pipe-style branches and pattern binders in lambda/let sites.
+	* Typechecker support for `checkPattern`-driven environment extension and branch checking in `Case`.
+* Extended type-level and unification support:
+	* Added primitive type nodes `TFloat`, `TString`, and `TBool`.
+	* Added `TVariant` and unified variant rows through existing row-polymorphism machinery.
+	* Updated `zonk`, `occurs`, `replaceMetas`, `subBound`, and `ftvType` traversal paths to include variants.
+* Reorganized golden test inputs:
+	* `.lithic` fixtures now live in `test/fixtures/`.
+	* Expected snapshots remain in `test/golden/*.golden`.
+	* Golden harness now discovers fixtures from `test/fixtures` and maps by basename to `test/golden` outputs.
+* Synced documentation and planning docs with current feature state and roadmap phase progression.
+
 ## 0.7.0.0 -- 2026-05-04
 
 * Added initial row-polymorphism surface and type-level machinery:

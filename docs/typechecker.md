@@ -8,7 +8,7 @@ The typechecker is split into two mutually recursive phases: **Synthesis** (`inf
 
 ### 1. Synthesis (`infer`)
 *Bottom-up propagation.* The `infer` function takes an expression and attempts to deduce its type strictly from its sub-expressions.
-* Use case: literals, variables, lambdas (annotated and unannotated), annotated bindings, and function applications.
+* Use case: literals, variables, lambdas (annotated and unannotated), annotated bindings, function applications, variants, case expressions, and arithmetic terms.
 * Example: for `f x`, if `f` is currently unknown (`TMeta`), the checker allocates fresh meta-variables for domain/range, constrains `f` to an arrow type, then checks `x` against the inferred domain.
 
 ### 2. Checking (`check`)
@@ -73,6 +73,37 @@ Current status note:
 1. Structural records (`TRecord` over row types) are supported now.
 2. Nominal-record path resolution is intentionally stubbed and currently returns a targeted type error.
 
+### Arithmetic Typing Scope and Extensibility
+
+Unary minus and subtraction are currently treated as primitive numeric operators in the checker.
+
+1. Current scope is intentionally narrow: arithmetic is specialized to `Int` and `Float`.
+2. When one side of arithmetic is concrete (`Int` or `Float`) and the other side is still an unresolved meta-variable, the checker constrains the unresolved side to match.
+3. When arithmetic remains unresolved on all sides, the checker emits an explicit ambiguity error rather than silently defaulting.
+
+This design is an intentional short-term tradeoff for Phase-6/Phase-7 stability. It is not the final extensibility model.
+
+Planned direction:
+1. Introduce a constraint-driven numeric capability layer for arithmetic.
+2. Move operator typing to that capability layer so numeric behavior is not hard-coded to a fixed primitive set.
+3. Define explicit defaulting/ambiguity rules once capability constraints exist.
+4. Support module-level and library-defined numeric types through capability resolution, not compiler hard-coding.
+
+### Planned Constraint/Type-Class Layer
+
+Lithic is expected to adopt a trait/class-style constraint mechanism (Haskell-style class predicates) as the medium-term path for extensible operator typing.
+
+Planned checker boundaries:
+1. **Constraint generation:** `infer`/`check` should emit predicate obligations where operations require capabilities (for example numeric subtraction).
+2. **Constraint solving:** a dedicated solver/elaboration boundary should discharge obligations against in-scope instances/capabilities.
+3. **Evidence transport:** solved constraints should be represented as explicit evidence at elaboration boundaries (dictionary-style lowering target), not hidden global state.
+4. **Ambiguity policy:** unresolved constraints should produce explicit diagnostics unless an explicit defaulting rule applies.
+
+Planned coherence rules:
+1. Deterministic instance resolution for stable diagnostics.
+2. Explicit policy for overlap and orphan-style definitions.
+3. Module-boundary visibility rules so library-defined capabilities participate predictably.
+
 ### Deep Resolution (`zonk`)
 Because the substitution map is updated incrementally, a meta-variable might point to another meta-variable, which points to a concrete type. 
 
@@ -84,7 +115,7 @@ You should use these operations for different purposes:
 
 ## Current Scope
 
-This branch includes stateful substitution infrastructure, persistent REPL-level `TCState`, corrected deep resolution for displayed types, fresh-meta based inference/checking paths for previously unresolved lambda/application cases, HM-style let-polymorphism (`generalize`/`instantiate`) for `let` bindings, initial rank-2-aware subsumption via skolemization/instantiation, and initial structural row-polymorphism plus lens-update checking for records.
+This branch includes stateful substitution infrastructure, persistent REPL-level `TCState`, corrected deep resolution for displayed types, fresh-meta based inference/checking paths for previously unresolved lambda/application cases, HM-style let-polymorphism (`generalize`/`instantiate`) for `let` bindings, rank-2-aware subsumption via skolemization/instantiation, structural row-polymorphism plus lens-update checking for records, variant row typing (`TVariant`), literal-family inference (`Int`/`Float`/`String`/`Bool`), basic pattern checking (`checkPattern`) for binders and case branches, and arithmetic checking for unary minus/subtraction.
 
 The rank-2 path is intentionally scoped to subsumption and rigid-skolem safety checks. Richer elaboration-oriented features (for example, macro-aware elaboration and deeper constraint systems beyond current unification/subsumption) remain future work.
 

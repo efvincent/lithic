@@ -20,13 +20,16 @@ Keep phases highly decoupled and preserve clear subsystem boundaries.
 
 2. Parsing (Pratt Parser) — **COMPLETED**:
    - Top-down operator precedence (Pratt) with explicit NUD/LED (null/left denotation) structure.
-  - Precedence model: `PrecLowest` (0), `PrecAnn` (5), `PrecApp` (30), `PrecSelect` (40).
+  - Precedence model: `PrecLowest` (0), `PrecAnn` (5), `PrecAdd` (10), `PrecApp` (30), `PrecPrefix` (35), `PrecSelect` (40).
    - Juxtaposition is implicit application (e.g., `f x` parses as `App f x`).
    - Let-binding RHS parses with `PrecLowest` to capture full expressions including type annotations.
    - Lambda bodies parse with `PrecLowest` to allow all valid term-level constructs.
    - Type annotations in expression position via `:` operator (e.g., `x : Int`, `\p : a -> b => p`).
+  - Primitive literals: `Int`, `Float`, `String`, and `Bool` (`True` / `False`).
+  - Arithmetic includes prefix negation (`-x`) and infix subtraction (`x - y`).
   - Record literals and selection are supported: `{ x = 1 }`, `r.x`.
   - Native lens update syntax is supported for field paths: `r.{ x := 1 }`, `r.{ x %= f }`.
+  - Case expressions are supported: `case scrut of | pat => expr | ...`.
    - Application is right-associative at LED; parser uses pushback pattern to avoid left-recursion.
    - Pure entry point: `runParser :: [Token] -> Either ParseError Expr`.
    - Parser is frontend-agnostic; does not perform type checking, elaboration, or evaluation.
@@ -83,12 +86,15 @@ Keep phases highly decoupled and preserve clear subsystem boundaries.
 - **Lambdas:** `\x => body` or `fn x => body` (fat arrow `=>` is the delimiter, never thin arrow `->`)
 - **Type-annotated lambdas:** `\x : T => body` (inline annotation without parens, unambiguous)
 - **Let-bindings:** `let x = e1 in e2` where e1 may include annotations: `let x = e : T in e2`
+- **Case expressions:** `case expr of | pat => expr | pat2 => expr2`
+- **Literals:** `42`, `3.14`, `"hello"`, `True`, `False`
+- **Arithmetic:** unary minus (`-x`) and infix subtraction (`x - y`)
 - **Implicit application:** Juxtaposition binds tightly (precedence 30): `f x y` parses as `(f x) y`
 - **Type annotations:** `expr : Type` (precedence 5, lower than application)
 - **Records (structural):** `{ x = e, y = e2 }`, with row-tail form `{ x = e | rest }`
 - **Field selection:** `record.field` (binds tighter than application)
 - **Lens updates:** `record.{ a.b := value }` and `record.{ a.b %= fn }`
-- **Data constructors:** Uppercase identifiers in term position (e.g., `True`, `Just x`, `Left y`) are reserved for future ADT support; currently parse as variables
+- **Variants:** Uppercase constructors are parsed as variant constructors with payload (e.g., `Ok x`, `Err e`)
 
 ### Type-Level Syntax
 - **Function types:** `a -> b` (thin arrow, right-associative)
@@ -99,6 +105,9 @@ Keep phases highly decoupled and preserve clear subsystem boundaries.
 ### Constraint and Context Syntax (Reserved for Future)
 - **Type class constraints:** Will use `=>` in type signatures (e.g., `Eq a => a -> a`) when constraint solving and class contexts are implemented
 - **This is consistent with term-level `=>` because contexts are type-level constructs**
+- **Rollout direction:** Introduce a trait/class-style predicate layer first for numeric operators, then generalize to broader capability domains
+- **Elaboration intent:** Constraints should lower through explicit evidence passing (dictionary-style), not hidden implicit global state
+- **Coherence intent:** Keep deterministic instance resolution and document overlap/orphan policies before enabling broad user-defined capability ecosystems
 
 ## Error Handling and Diagnostics Strategy
 

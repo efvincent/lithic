@@ -29,6 +29,9 @@ These decisions are locked in and should guide all future implementation phases:
 * **Effect System (Lexical Capability Passing):** Lithic avoids the heavy runtime overhead and CPS-transformations of true algebraic continuations. Instead, it utilizes a Bluefin-style capability-passing model. Effects are tracked in the type system via row polymorphism (e.g., `Int -> { io, net } Int`) and compiled to standard C as implicit dictionary pointers. This guarantees native C stack performance and trivial FFI integration while maintaining pure functional control flow.
 * **Pattern Guards:** The pattern matching engine supports guards (`| pattern if cond => expr`), requiring the desugaring phase to support backtracking decision trees to ensure fall-through semantics when guards fail.  
 
+### Design Decision: Variant Payloads
+Variants in Lithic unconditionally require a payload. To represent nullary constructors (e.g., `None`), pass the empty record `{} ` as the payload: `None {}`. The corresponding pattern match is `None {} => ...`.
+
 ## 3. Development Methodology
 Lithic is developed in isolated **Phases**. A phase represents a single, complete vertical slice of a compiler feature. 
 The standard lifecycle of a Phase is:
@@ -57,45 +60,91 @@ The standard lifecycle of a Phase is:
 * Introduced `TSkolem` (rigid constants).
 * Upgraded the `subsumes` bridge to implement Skolemization on expected types and Instantiation on inferred types.
 
-### 🚧 Phase 5: Row Polymorphism (CURRENT)
-* **Objective:** Introduce structural records, variants, and native lens operations.
-* **Tasks:** 
+### ✅ Phase 5: Row Polymorphism 
+* **Objective:** Introduce structural records and native lens operations.
+* **Tasks:**
   * [x] Add `TRowEmpty` and `TRowExtend` to AST.
   * [x] Implement row-shifting logic in `unify`.
   * [x] Implement term-level record expressions (`RecEmpty`, `RecExtend`, `RecSelect`).
   * [x] Add `UpdateOp` and `PathSegment` to AST for `RecUpdate`.
   * [x] Add lexer/parser support for core lens operators (`:=`, `%=`) and dotted field paths.
   * [x] Implement structural-record typechecking logic for `RecUpdate`.
-  * [ ] Extend lens path parsing to index/prism segments.
-  * [ ] Implement nominal-record field lookup and update routing.
 
-### 📅 Phase 6: Data Types, Pattern Matching & Existentials
-* **Objective:** Introduce ADTs (or GADTs), `case` expressions, and Existential quantification (`exists a.`). This expands Lithic beyond primitives into rich data modeling and encapsulation.
+### ✅ Phase 6: Variants, Literals & Basic Pattern Matching
+* **Objective:** Expand the AST and bidirectional engine to support structural variants, a full primitive suite, and basic pattern destructuring.
+* **Tasks:**
+  * [x] Implement comprehensive `Literal` suite (Int, Float, String, Bool).
+  * [x] Support prefix negation and infix subtraction with proper Pratt precedence.
+  * [x] Introduce `Pattern` AST (Wildcard, Var, Literal, Variant, Record).
+  * [x] Implement `checkPattern` for bidirectional environment extension.
+  * [x] Wire `TVariant` wrapper into the structural row unification engine.
 
-### 📅 Phase 7: Evaluation Semantics (Interpreter)
+### Numeric Operator Typing Policy (Current + Planned)
+* **Current implementation scope (intentional):**
+  * Unary minus and subtraction are currently modeled as primitive numeric operators over `Int` and `Float`.
+  * Unknown numeric meta-variables are constrained from surrounding concrete numeric operands when possible.
+  * Fully unresolved numeric expressions (for example meta/meta arithmetic) produce explicit ambiguity diagnostics rather than silent defaulting.
+* **Planned architectural direction (before broad numeric expansion):**
+  * Keep the current `Int`/`Float` fast path for early compiler phases.
+  * Introduce a constraint-driven numeric capability layer so operator typing is not hard-coded to a fixed primitive set.
+  * Route arithmetic through that capability layer so future numeric types are uniformly supported.
+  * Defer numeric defaulting policy until the constraint layer exists; avoid ad-hoc implicit widening/defaulting in the checker.
+* **Extensibility consequence:**
+  * Adding new numeric behavior through libraries alone is not sufficient today; compiler-level operator typing must move to capability constraints to support library-extensible numerics.
+
+### 🚧 Phase 7: Pattern Exhaustiveness & Reachability (CURRENT)
+* **Objective:** Implement Luc Maranget's Pattern Matrix decision tree algorithm to make non-exhaustive patterns and unreachable code hard compiler errors.
+* **Tasks:**
+  * [ ] Scaffold `Compiler.PatternMatch` module.
+  * [ ] Implement Matrix and Occurrence data structures.
+  * [ ] Implement `specialize` and `default` matrix decomposition functions.
+  * [ ] Wire exhaustiveness checking into the bidirectional `Case` evaluation.
+
+### 📅 Phase 8: Evaluation Semantics (Interpreter)
 * **Objective:** Build an internal evaluator to actually execute Lithic code.
 * **Tasks:** Experiment with and implement either strict or lazy semantics, evaluating the trade-offs of a small-step vs. big-step evaluator.
 
-### 📅 Phase 8: Rich REPL Experience
-* **Objective:** Continue improving the existing Brick-based terminal UI into a richer interactive environment.
-* **Tasks:** Add syntax highlighting, stronger multi-line editing ergonomics, better history/navigation behavior, and tighter evaluator-aware feedback.
+### 📅 Phase 9: Rich REPL Experience & Lexical Enhancements
+* **Objective:** Continue improving the interactive environment and finalize front-end ergonomic parsing features.
+* **Tasks:**
+  * [ ] Add syntax highlighting, stronger multi-line editing ergonomics, better history/navigation behavior, and tighter evaluator-aware feedback.
+  * [ ] **Future Lexical/Parsing Enhancements:**
+    * [ ] Support floats without an integer part (e.g., `.14159`).
+    * [ ] Support scientific notation (e.g., `1e-5`).
+    * [ ] Support multi-line strings.
+    * [ ] Support Character literals (e.g., `'a'`).
 
-### 📅 Phase 9: Module System
+### 📅 Phase 10: Existentials & GADTs
+* **Objective:** Introduce Existential quantification (`exists a.`) and Generalized ADT semantics, expanding Lithic into rich data encapsulation.
+
+### 📅 Phase 11: Module System
 * **Objective:** Support multi-file projects, imports, exports, and namespace resolution.
 
-### 📅 Phase 10: Linear Types & FBIP
+### 📅 Phase 12: Numeric Capabilities & Operator Overloading
+* **Objective:** Generalize arithmetic from fixed primitive checks to a constraint-driven numeric capability model.
+* **Tasks:**
+  * [ ] Introduce capability constraints for arithmetic operators (initially unary minus and subtraction).
+  * [ ] Add a trait/class-style predicate model at the type level (for example numeric capability predicates) as first-class constraints in type signatures.
+  * [ ] Define evidence passing strategy (dictionary-style elaboration target) so constraints can be resolved statically and lowered cleanly.
+  * [ ] Specify coherence rules: overlap policy, orphan policy, and deterministic instance resolution boundaries.
+  * [ ] Support a coherent numeric hierarchy beyond `Int` and `Float` (for example fixed-width ints, unsigned ints, and decimal/rational families).
+  * [ ] Define and implement explicit ambiguity/defaulting rules for unresolved numeric expressions.
+  * [ ] Ensure capability resolution works across module boundaries so library-defined numeric types can participate in arithmetic.
+
+#### Constraint-Layer Rollout Notes
+* **Surface syntax:** Continue reserving `=>` for type-level contexts so constrained signatures can be introduced without term-level syntax churn.
+* **First target domain:** Numeric operators (`-` unary and binary subtraction), then generalize the same mechanism to other capabilities.
+* **Future capability domains:** Equality/ordering, pretty-printing/serialization, collection-like abstractions, and effect capabilities.
+* **Design principle:** No implicit magic widening; defaults must be explicit and documented once the constraint solver exists.
+
+### 📅 Phase 13: Linear Types & FBIP
 * **Objective:** Upgrade the `Env` Reader to a consumable State/Resource tracker to enforce exact-once usage for deterministic memory management and safe in-place mutation.
 
-### 📅 Phase 11: C Code Generation & FFI
+### 📅 Phase 14: C Code Generation & FFI
 * **Objective:** Lower the fully zonked, typed AST into standard C, proving the zero-runtime concept.
 * **Tasks:** Implement a bidirectional Foreign Function Interface (FFI) to call C libraries directly from Lithic.
 
-### 📅 Phase 12: Tooling Ecosystem (LSP & Debugger)
+### 📅 Phase 15: Tooling Ecosystem (LSP & Debugger)
 * **Objective:** Elevate Lithic to a production-ready language.
 * **Tasks:** Build a Language Server Protocol (LSP) implementation for VSCode (leveraging our `SourceSpan` tracking) and introduce debugging hooks.
-
-## 5. Handover Protocol (New Chat Initialization)
-When starting a new LLM session, the user will upload the current state of the entire project repository. The following must be provided in the initial prompt:
-1.  A specific declaration of the current Phase and the immediate next step.
-
 *(Note for LLM: The workspace is fully loaded upon initialization. Do not ask the user to provide specific files like `AST.hs` or `TypeChecker.hs`, as they are already available in the uploaded context.)*
