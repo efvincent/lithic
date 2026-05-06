@@ -17,6 +17,8 @@ import Bluefin.Reader (Reader, ask, runReader)
 import Bluefin.State (State, get, modify)
 
 import Compiler.AST 
+import Compiler.PatternMatch (CoverageError(..), checkCasePatterns)
+
 import Lens.Micro ((.~), (%~))
 import Data.Function ((&))
 
@@ -239,7 +241,8 @@ infer st env ex expr =
     Case sp scrutinee branches -> do
       scrutTy <- infer st env ex scrutinee
       resultTy <- freshMeta sp st
-      -- Enforce that all branches match the scrutinee type and yield the same result type
+      
+      -- First typecheck branches to let patterns constrain the scrutinee type.
       let checkBranch (branchPat, branchBody) = do
             bindings <- checkPattern st ex branchPat scrutTy
             currentEnv <- ask env
@@ -247,6 +250,16 @@ infer st env ex expr =
             runReader newEnv \newEnvHandle ->
               check st newEnvHandle ex branchBody resultTy
       mapM_ checkBranch branches
+
+      -- Then run coverage on the refined scrutinee type.
+      refinedScrutTy <- force st scrutTy
+      case checkCasePatterns refinedScrutTy (map fst branches) of
+        Left (Redundant pat) ->
+          throw ex $ MkTypeError "Unreachable pattern branch" (getPatternSpan pat)
+        Left (NonExhaustive ws) -> do
+          let witnessText = T.intercalate ", " (map (T.pack . show) (take 3 ws))
+          throw ex $ MkTypeError ("Non-exhaustive patterns in case. Missing: " <> witnessText) sp
+        Right () -> pure ()
       pure resultTy
 
     Variant sp label payload -> do

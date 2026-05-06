@@ -30,6 +30,8 @@ In the REPL:
 - Case expressions are supported, for example `case v of | Ok x => x | Err _ => 0`.
 - Primitive literals currently include `Int`, `Float`, `String`, and `Bool` (`True`/`False`).
 - Prefix unary minus and infix subtraction are supported (`-x`, `x - y`).
+- Function-equation syntax with guards and pattern-headed clauses is planned but not yet implemented.
+- Phase-7 interim behavior: case exhaustiveness is enforced for finite and open universes; unreachable-branch errors are currently enforced for finite universes only.
 - Successful input is rendered as two lines: `[AST] <show ast>` followed by `[Type] <show type>`.
 - Lexing, parsing, and type errors are shown inline in the same pane.
 - Press Enter to submit the current editor contents.
@@ -53,6 +55,24 @@ state.{ player.stats.hp := 99 }
 let r = { x = 1 } in
 r.{ x %= \v => 99 }
 ```
+
+## Planned Function-Definition Syntax
+
+The following forms are roadmap targets and are intentionally not accepted by the current parser yet:
+
+```haskell
+isOdd n
+  | n % 2 == 0 => False
+  | otherwise => True
+```
+
+```haskell
+isEmpty :: [a] -> Bool
+isEmpty [] = True
+isEmpty _ = False
+```
+
+These forms are planned to land with declaration-group parsing and will elaborate into internal lambda/case structures so existing pattern-coverage machinery can be reused.
 
 ## Documentation Index
 

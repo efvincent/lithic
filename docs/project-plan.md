@@ -27,7 +27,8 @@ These decisions are locked in and should guide all future implementation phases:
   * **Unified Lenses:** Both modes share the same native lens syntax (`record.{ x := 1 }`) and AST node (`RecUpdate`). The current checker fully supports structural mode and keeps nominal mode as planned follow-up work.
 * **Universal Pattern Matching (Destructuring & Exhaustiveness):** Binding sites across the language (`let`, function parameters, `case`) support deep destructuring of Algebraic Data Types, records, and lists. The compiler includes a dedicated Pattern Compilation phase to enforce strict **exhaustiveness and reachability checking**. Unhandled cases (e.g., matching a list of length 3 but omitting the empty or arbitrary-length cases) or unreachable redundant patterns will result in hard compile-time errors, ensuring absolute structural safety before C-generation.
 * **Effect System (Lexical Capability Passing):** Lithic avoids the heavy runtime overhead and CPS-transformations of true algebraic continuations. Instead, it utilizes a Bluefin-style capability-passing model. Effects are tracked in the type system via row polymorphism (e.g., `Int -> { io, net } Int`) and compiled to standard C as implicit dictionary pointers. This guarantees native C stack performance and trivial FFI integration while maintaining pure functional control flow.
-* **Pattern Guards:** The pattern matching engine supports guards (`| pattern if cond => expr`), requiring the desugaring phase to support backtracking decision trees to ensure fall-through semantics when guards fail.  
+* **Pattern Guards:** Planned guard handling uses ordered guard evaluation with explicit fall-through semantics (`| guard => expr`) and lowers through the decision-tree/match compilation pipeline.
+* **Function Equations (Planned Surface Form):** Lithic will support grouped multi-clause function equations with optional guards and pattern-headed arguments; elaboration will lower these declarations to a unified lambda-plus-match internal representation.
 
 ### Design Decision: Variant Payloads
 Variants in Lithic unconditionally require a payload. To represent nullary constructors (e.g., `None`), pass the empty record `{} ` as the payload: `None {}`. The corresponding pattern match is `None {} => ...`.
@@ -134,6 +135,9 @@ After Phase 7 reaches implementation stability, produce a fuller language specif
 * **Objective:** Continue improving the interactive environment and finalize front-end ergonomic parsing features.
 * **Tasks:**
   * [ ] Add syntax highlighting, stronger multi-line editing ergonomics, better history/navigation behavior, and tighter evaluator-aware feedback.
+  * [ ] Add parser support for top-level and local function-equation syntax with shared-name clauses.
+  * [ ] Add guard syntax on function equations (Haskell-style guard lists) and lower to decision trees.
+  * [ ] Add pattern-headed function equations and desugar to `case` while preserving source spans.
   * [ ] **Future Lexical/Parsing Enhancements:**
     * [ ] Support floats without an integer part (e.g., `.14159`).
     * [ ] Support scientific notation (e.g., `1e-5`).
@@ -145,6 +149,27 @@ After Phase 7 reaches implementation stability, produce a fuller language specif
 
 ### 📅 Phase 11: Module System
 * **Objective:** Support multi-file projects, imports, exports, and namespace resolution.
+
+### Planned Surface Syntax Addendum: Function Clauses and Guards
+The following user-facing forms are target surface syntax for future phases and are roadmap commitments (not implemented in the current parser/runtime):
+
+```haskell
+isOdd n
+  | n % 2 == 0 => False
+  | otherwise => True
+```
+
+```haskell
+isEmpty :: [a] -> Bool
+isEmpty [] = True
+isEmpty _ = False
+```
+
+Design constraints for implementation:
+1. Multi-clause equations for a function name must be grouped and typechecked as one declaration unit.
+2. Guarded clauses must preserve ordered fall-through semantics.
+3. Pattern-headed equations must lower to a single internal match structure that shares exhaustiveness/redundancy analysis with `case`.
+4. Diagnostics must point to clause-local spans (pattern head, guard, or RHS), not only declaration-level spans.
 
 ### 📅 Phase 12: Numeric Capabilities & Operator Overloading
 * **Objective:** Generalize arithmetic from fixed primitive checks to a constraint-driven numeric capability model.
