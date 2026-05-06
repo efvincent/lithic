@@ -17,25 +17,32 @@ data TokenClass
   = TokIdent Text   -- ^ Lowercase idents (term variables, type variables)
   | TokUIdent Text  -- ^ Uppercase idents (concrete types)
   | TokInt Int      -- ^ Integer Literals
+  | TokFloat Double -- ^ Double literals
+  | TokString Text  -- ^ String literals
+  | TokTrue
+  | TokFalse
   | TokColon        -- ^ The colon operator
   | TokLet          -- ^ The `let` keyword
   | TokIn           -- ^ The `in` keyword
   | TokLam          -- ^ The `\` or `fn` keyword for lambdas
   | TokArrow        -- ^ The `->` operator
-  | TokFatArrow     -- ^ The `=>` operator for lambdas
+  | TokFatArrow     -- ^ The operator for lambdas
   | TokAssign       -- ^ The `=` operator
+  | TokMinus        -- ^ The `-` minus operator
   | TokLParen 
   | TokRParen
   | TokForall       -- ^ `forall` operator
   | TokDot          -- ^ `.` operator
-  | TokEOF
   | TokLBrace       -- ^ {
   | TokRBrace       -- ^ }
   | TokComma        -- ^ ,
   | TokPipe         -- ^ |
   | TokLensSet      -- ^ Record Lens assignment operator `:=`
   | TokLensMod      -- ^ Record Lens Modification operator `%=`
-  
+  | TokCase         -- ^ The `case` keyword
+  | TokOf           -- ^ The `of` keyword
+  | TokWildcard     -- ^ The `_` wildcard pattern
+  | TokEOF
   deriving (Show, Eq, Generic)
 
 -- | A complete token, pairing its syntactic class with its exact source location
@@ -79,15 +86,24 @@ scanTokens st ex = loop []
         mc <- advance st
         case mc of 
           -- Single character operators
-          Just '\\' -> emit TokLam startSt acc
-          Just '('  -> emit TokLParen startSt acc
-          Just ')'  -> emit TokRParen startSt acc
-          Just '.'  -> emit TokDot startSt acc
-          Just '∀'  -> emit TokForall startSt acc
-          Just '{'  -> emit TokLBrace startSt acc
-          Just '}'  -> emit TokRBrace startSt acc
-          Just ','  -> emit TokComma startSt acc
-          Just '|'  -> emit TokPipe startSt acc
+          Just '\\' -> emit TokLam      startSt acc
+          Just '('  -> emit TokLParen   startSt acc
+          Just ')'  -> emit TokRParen   startSt acc
+          Just '.'  -> emit TokDot      startSt acc
+          Just '∀'  -> emit TokForall   startSt acc
+          Just '{'  -> emit TokLBrace   startSt acc
+          Just '}'  -> emit TokRBrace   startSt acc
+          Just ','  -> emit TokComma    startSt acc
+          Just '|'  -> emit TokPipe     startSt acc
+          Just '_'  -> emit TokWildcard startSt acc
+
+          Just '"' -> do
+            strText <- consumeWhile (/= '"') st
+            endQuote <- advance st -- consume closing quote
+            case endQuote of
+              Just '"' -> emit (TokString strText) startSt acc
+              _ -> throw ex $ MkLexError "Unterminated string literal" startSt.line startSt.col
+
 
           Just ':'  -> do
             next <- peek st
@@ -95,8 +111,6 @@ scanTokens st ex = loop []
               Just '=' -> do
                 _ <- advance st
                 emit TokLensSet startSt acc
-                -- if it's just a colon, emith the standard type annotation token
-                -- adjust `TokColon` to whatever you current call it
               _ -> emit TokColon startSt acc
 
           Just '%' -> do
@@ -128,10 +142,15 @@ scanTokens st ex = loop []
               Just '>' -> do
                 _ <- advance st
                 emit TokArrow startSt acc
+              Just '-' -> do
+                _ <- advance st
+                -- Consume the rest of the line (until newline or EOF)
+                _ <- consumeWhile (/= '\n') st
+                -- Do not emit a token, loop back to scan the next token
+                loop acc
               _ -> 
-                throw ex $ 
-                MkLexError "Unexpected character '-'. Did you mean '->'?" 
-                  startSt.line startSt.col
+                -- Fallback: it's a standard minus sign
+                emit TokMinus startSt acc
           
           -- Identifiers and keywords
           Just c | isAlpha c -> do
@@ -145,16 +164,29 @@ scanTokens st ex = loop []
               "in"     -> emit TokIn startSt acc
               "fn"     -> emit TokLam startSt acc    -- 'fn' as an alternative to '\'
               "forall" -> emit TokForall startSt acc
+              "case"   -> emit TokCase startSt acc
+              "of"     -> emit TokOf startSt acc
+              "True"   -> emit TokTrue startSt acc
+              "False"  -> emit TokFalse startSt acc
               _ | isUpper c -> emit (TokUIdent ident) startSt acc
               _             -> emit (TokIdent ident) startSt acc
 
           -- Numeric literals
           Just c | isDigit c -> do
+            -- Consume the integer part
             rest <- consumeWhile isDigit st
-            let numStr = T.singleton c <> rest
-            -- read is safe here beacuse consumeWhile guarantees only digits
-            let val = read (T.unpack numStr) :: Int
-            emit (TokInt val) startSt acc
+            let intPart = T.singleton c <> rest
+            next <- peek st
+            case next of
+              Just '.' -> do
+                _ <- advance st   -- Consume the dot
+                fracPart <- consumeWhile isDigit st
+                let floatVal = read (T.unpack (intPart <> "." <> fracPart)) :: Double
+                emit (TokFloat floatVal) startSt acc
+              _ -> do
+                let intVal = read (T.unpack intPart) :: Int
+                emit (TokInt intVal) startSt acc
+
 
           -- Fallback for unhandled characters
           Just c -> throw ex (MkLexError ("Unexpected character: " <> T.singleton c) startSt.line startSt.col)

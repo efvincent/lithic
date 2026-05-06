@@ -35,21 +35,29 @@ data Kind
 data Type
   = TVar SourceSpan Text
   | TInt SourceSpan
+  | TFloat SourceSpan
+  | TString SourceSpan
+  | TBool SourceSpan
   | TArrow SourceSpan Type Type
   | TForall SourceSpan [Text] Type        -- ^ Universal quantification: forall a b. a -> b
   | TMeta SourceSpan Int                  -- ^ A unification meta-variable
   | TSkolem SourceSpan Int Text           -- ^ A rigid skolem constant for Rank-2 typechecking
+  | TVariant SourceSpan Type
   
-  -- | Row Polymorphism (Kind:KRow)
+  -- Row Polymorphism (Kind:KRow)
   | TRowEmpty SourceSpan
   | TRowExtend SourceSpan Text Type Type  -- ^ Label, Type of the field, and the rest of the Row
 
-  -- | Nominal types (Kind:KType)
+  -- Nominal types (Kind:KType)
   | TNominal SourceSpan Text
 
-  -- | Bridges KRow to KType. Turns a raw row of fields into an actual usable Record type.
+  -- Bridges KRow to KType. Turns a raw row of fields into an actual usable Record type.
   | TRecord SourceSpan Type
   deriving (Show, Eq, Generic)
+
+-- Unary and binary operations
+data UnOp  = UMinus deriving (Show, Eq, Generic)
+data BinOp = OpSub deriving (Show, Eq, Generic)
 
 -- | Defines the type of lens operation being performed
 data UpdateOp
@@ -65,19 +73,51 @@ data PathSegment
   -- | PathPrism Text -- ^ Variant projection: `.?Ok`
   deriving (Show, Eq, Generic)
 
+-- | Represents primitive literal values in Lithic
+data Literal
+  = LInt Int
+  | LFloat Double
+  | LString Text
+  | LBool Bool
+  deriving (Show, Eq, Generic)
+
+-- | Represents a pattern in a binder (Lambda, Let, or Case)
+data Pattern
+  = PVar SourceSpan Text
+  | PWildcard SourceSpan 
+  | PLit SourceSpan Literal
+  | PVariant SourceSpan Text Pattern
+  | PRecord SourceSpan [(Text, Pattern)]
+  deriving (Show, Eq, Generic)
+
+-- | Extracts the source span from a Pattern node
+getPatternSpan :: Pattern -> SourceSpan
+getPatternSpan = \case
+  PVar sp _       -> sp
+  PWildcard sp    -> sp
+  PLit sp _       -> sp
+  PVariant sp _ _ -> sp
+  PRecord sp _    -> sp
+
 -- | The core expression AST for lithic
 data Expr
-  = Var SourceSpan Text                   -- ^ A variable identifier: x
-  | Lit SourceSpan Int                    -- ^ A primitive integer literal
-  | Lam SourceSpan Text (Maybe Type) Expr -- ^ A lambda abstraction, optionally annotated: \x : Int -> expr
-  | App SourceSpan Expr Expr              -- ^ A function application: f x
-  | Let SourceSpan Text Expr Expr         -- ^ Explicit let-binding for FBIP: let x = expr1 in expr2
-  | Ann SourceSpan Expr Type              -- ^ Explicit type annotation: expr : Type
-  -- | Record additions
+  = Var SourceSpan Text                      -- ^ A variable identifier: x
+  | Lit SourceSpan Literal                   -- ^ A primitive literal
+  | Lam SourceSpan Pattern (Maybe Type) Expr -- ^ A lambda abstraction, optionally annotated: \x : Int -> expr
+  | App SourceSpan Expr Expr                 -- ^ A function application: f x
+  | Let SourceSpan Pattern Expr Expr         -- ^ Explicit let-binding for FBIP: let x = expr1 in expr2
+  | Ann SourceSpan Expr Type                 -- ^ Explicit type annotation: expr : Type
+  -- Record additions
   | RecEmpty SourceSpan
-  | RecExtend SourceSpan Text Expr Expr   -- ^ Label, Field value, Rest of record
-  | RecSelect SourceSpan Expr Text        -- ^ Record expression, Label to extract
+  | RecExtend SourceSpan Text Expr Expr                   -- ^ Label, Field value, Rest of record
+  | RecSelect SourceSpan Expr Text                        -- ^ Record expression, Label to extract
   | RecUpdate SourceSpan Expr [PathSegment] UpdateOp Expr -- ^ Native Lenses
+  -- Pattern matching
+  | Case SourceSpan Expr [(Pattern, Expr)]   -- ^ case expression
+  | Variant SourceSpan Text Expr             -- ^ Constructing a variant: `Ok 42`
+  -- Unary and binary operations
+  | Unary SourceSpan UnOp Expr
+  | Binary SourceSpan BinOp Expr Expr
   deriving (Show, Eq, Generic)
 
 -- | Extract the source span from a Type node
@@ -85,10 +125,14 @@ getTypeSpan :: Type -> SourceSpan
 getTypeSpan = \case
   TVar sp _           -> sp
   TInt sp             -> sp
+  TFloat sp           -> sp
+  TString sp          -> sp
+  TBool sp            -> sp
   TArrow sp _ _       -> sp
   TForall sp _ _      -> sp
   TMeta sp _          -> sp
   TSkolem sp _ _      -> sp
+  TVariant sp _1      -> sp
   TRowEmpty sp        -> sp
   TRowExtend sp _ _ _ -> sp
   TNominal sp _       -> sp
@@ -107,3 +151,7 @@ getSpan = \case
   RecExtend sp _ _ _   -> sp
   RecSelect sp _ _     -> sp
   RecUpdate sp _ _ _ _ -> sp
+  Case sp _ _          -> sp
+  Variant sp _ _       -> sp
+  Unary sp _ _         -> sp
+  Binary sp _ _ _      -> sp
