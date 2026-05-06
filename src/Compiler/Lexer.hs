@@ -95,7 +95,13 @@ scanTokens st ex = loop []
           Just '}'  -> emit TokRBrace   startSt acc
           Just ','  -> emit TokComma    startSt acc
           Just '|'  -> emit TokPipe     startSt acc
-          Just '_'  -> emit TokWildcard startSt acc
+          Just '_'  -> do
+            next <- peek st
+            case next of
+              Just c | isAlphaNum c || c == '_' || c == '\'' -> do
+                rest <- consumeWhile (\x -> isAlphaNum x || x == '_' || x == '\'') st
+                emit (TokIdent (T.cons '_' rest)) startSt acc
+              _ -> emit TokWildcard startSt acc
 
           Just '"' -> do
             strText <- consumeWhile (/= '"') st
