@@ -1,0 +1,2 @@
+[AST] Let [1,1]..[3,7] (PVar [1,5]..[1,8] "data") (RecExtend [1,12]..[1,25] "value" (Lit [1,22]..[1,23] (LInt 2)) (RecEmpty [1,25]..[1,25])) (Let [2,1]..[3,7] (PVar [2,5]..[2,11] "updated") (RecUpdate [2,15]..[2,40] (Var [2,15]..[2,18] "data") [PathField "value"] OpModify (Lam [2,31]..[2,38] (PVar [2,32]..[2,32] "v") Nothing (Lit [2,37]..[2,38] (LInt 9)))) (Var [3,1]..[3,7] "updated"))
+[Type] TRecord [1,12]..[1,25] (TRowExtend [1,12]..[1,25] "value" (TInt [1,22]..[1,23]) (TRowEmpty [1,25]..[1,25]))

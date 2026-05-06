@@ -2,7 +2,7 @@ module Main where
 
 import Test.Tasty (defaultMain, testGroup, TestTree)
 import Test.Tasty.Golden (findByExtension, goldenVsString)
-import System.FilePath (replaceExtension, takeBaseName)
+import System.FilePath ((</>), takeBaseName)
 
 import qualified Data.ByteString.Lazy.Char8 as BSL
 import qualified Data.Text as T
@@ -28,15 +28,15 @@ main = do
 
 discoverGoldenTests :: IO TestTree
 discoverGoldenTests = do
-  -- Auto find all .lithic files in the golden directory
-  lfiles <- findByExtension [".lithic"] "test/golden"
+  -- Auto find all .lithic files in the fixtures directory
+  lfiles <- findByExtension [".lithic"] "test/fixtures"
   pure $ testGroup "Golden Tests" (map mkGoldenTest lfiles)
 
 
 mkGoldenTest :: FilePath -> TestTree
 mkGoldenTest p =
   let n = takeBaseName p
-      goldenPath = replaceExtension p ".golden"
+      goldenPath = "test" </> "golden" </> n <> ".golden"
   in goldenVsString n goldenPath (runCompilerPipeline p)
 
 runCompilerPipeline :: FilePath -> IO BSL.ByteString
@@ -58,3 +58,4 @@ runCompilerPipeline path = do
               Left tcErr -> "Type Error: " <> tcErr.msg <> " at " <> T.pack (show tcErr.span)
               Right ty -> "[AST] " <> T.pack (show ast) <> "\n[Type] " <> T.pack (show ty)
   pure $ BSL.pack (T.unpack resultText <> "\n") 
+

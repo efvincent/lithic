@@ -1,0 +1,7 @@
+-- This is a top-level comment
+let x = 42 -- This comment is at the end of a line
+in
+-- This comment separates bindings
+let y = x
+in y
+-- Trailing comment at EOF
