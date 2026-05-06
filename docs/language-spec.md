@@ -73,6 +73,10 @@ The lexer recognizes the following core keywords/symbols used by the implemented
 - `%=` (lens modify)
 - `-` (prefix unary minus and infix subtraction)
 
+Reserved (not currently implemented):
+- Function-equation clause heads (for example, `name pat1 pat2 = expr`).
+- Guarded declaration bars (for example, `| guard => expr`).
+
 ### 2.3 Literals
 
 Supported literal token families:
@@ -138,6 +142,45 @@ Notes:
 1. `UIdent Expr` payloads are currently required; nullary constructors are represented with an explicit empty-record payload (for example, `None {}`).
 2. Record labels in row-like forms may be lowercase or uppercase at parser level.
 3. `fn` lambda syntax is documented in project guidance as accepted intent, but parser support is currently via `\\`; treat `fn` as Reserved until parser support lands.
+
+### 3.4 Declaration Forms (Reserved)
+
+The current parser is expression-oriented and does not yet parse declaration groups. The forms below are reserved roadmap syntax and are not accepted by the current parser.
+
+Status table for planned declaration forms:
+
+| Form | Target Syntax | Implementation Status | Notes |
+| --- | --- | --- | --- |
+| Function equation (single clause) | `f p1 ... pn = expr` | Not implemented yet | Will parse as a declaration clause, not an expression form. |
+| Function equation (multi clause) | repeated `f ... = ...` clauses | Not implemented yet | Clauses will be grouped by function name into one declaration unit. |
+| Guarded clause | `f p1 ... pn` then `| guard => expr` lines | Not implemented yet | Guard RHS uses fat arrow to remain consistent with term-level branch delimiters. |
+| Pattern-headed clause | `f <pattern> ... = expr` | Not implemented yet | Will lower through the same match-analysis pipeline as `case`. |
+
+```text
+Decl ::= ident Pattern* "=" Expr
+                      | ident Pattern* GuardedRhs+
+
+GuardedRhs ::= "|" GuardExpr "=>" Expr
+GuardExpr ::= Expr
+```
+
+Examples (target surface syntax):
+
+```haskell
+isOdd n
+       | n % 2 == 0 => False
+       | otherwise => True
+```
+
+```haskell
+isEmpty [] = True
+isEmpty _ = False
+```
+
+Planned elaboration model:
+1. Group clauses by function name.
+2. Lower grouped equations to a single lambda/case decision tree.
+3. Reuse pattern coverage machinery for exhaustiveness and redundancy reporting.
 
 ### 3.2 Patterns (Provisional for exhaustiveness details)
 
@@ -247,6 +290,11 @@ Nominal path resolution is intentionally stubbed for now and reports targeted ty
 - Pattern checking extends local environments for branch/body checking.
 - Case branch result types must reconcile via checker constraints.
 
+Current Phase-7 interim boundary:
+- Exhaustiveness is enforced for both finite and open constructor universes.
+- Redundancy (unreachable-branch) errors are currently enforced for finite universes only.
+- For open universes (for example open variant rows), redundancy detection is intentionally deferred until open-world usefulness is fully stabilized.
+
 Exhaustiveness/reachability hard errors are not yet fully implemented (Phase 7 target).
 
 ### 5.7 Numeric Operators (Stable current policy, Provisional long-term model)
@@ -279,6 +327,7 @@ Explicitly deferred to later formalization:
 - Macro expansion semantics and hygiene model.
 - Full constraint solver coherence proof/model.
 - Full pattern matrix formalization and proof obligations.
+- Full declaration-group parsing and function-equation formal semantics.
 
 ## 8. Phase-7 Formalization Plan Boundary
 
@@ -301,6 +350,7 @@ Covered constructs (Phase 7 target):
 Deferred to follow-up phase work:
 1. Exhaustiveness/redundancy checks for binder patterns in `let` and lambda parameters.
 2. Guard-aware usefulness semantics.
+3. Exhaustiveness/redundancy checks for grouped function-equation clauses.
 
 Diagnostic level:
 1. Hard type errors (reject program).
@@ -329,6 +379,7 @@ Initial constructor universe policy:
 2. Variants (`TVariant` over row):
        - Constructors are enumerated from statically known row labels when row is closed enough after forcing/zonking.
        - If variant row remains open/unknown, algorithm may not claim totality from constructor enumeration alone; default/wildcard coverage is required.
+       - Interim implementation note: open-row universes still participate in exhaustiveness via default coverage, while redundancy checks are deferred.
 3. Record patterns:
        - Kept provisional until parser support for `PRecord` is complete.
 
@@ -385,7 +436,8 @@ Useful(P_prefix, r) => Useful | Redundant
 Semantics:
 1. A branch row `r` is redundant iff it is not useful relative to previously accepted rows `P_prefix`.
 2. Redundancy check runs in source order for each case branch.
-3. In Phase 7, every redundant branch is reported as an error; multi-branch reporting is preferred if diagnostics accumulation remains practical.
+3. In Phase 7 target behavior, every redundant branch is reported as an error; multi-branch reporting is preferred if diagnostics accumulation remains practical.
+4. Interim implementation boundary: redundancy reporting is currently restricted to finite constructor universes; open-universe redundancy remains deferred.
 
 Guard policy:
 1. Pattern guards are not part of Phase 7 enforcement; this judgment applies to unguarded branch sets only.

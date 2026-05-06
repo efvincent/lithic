@@ -6,6 +6,7 @@ let f : Variant { Ok : String, Err : {} | a } -> String = \res =>
     | Ok "success" => "Matched string literal"
     | Ok _         => "Matched wildcard"
     | Err _        => "Matched error wildcard"
+    | _            => "Did not match!"
 in
 let checkBool = \b =>
   case b of

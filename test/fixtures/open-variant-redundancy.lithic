@@ -1,0 +1,12 @@
+-- Open variant row with constructor-specific literal refinement plus wildcard.
+-- Regression target:
+-- - Must NOT raise unreachable-branch error for `Ok _` after `Ok "success"`.
+-- - Must typecheck successfully with explicit fallback wildcard.
+
+let f : Variant { Ok : String, Err : {} | a } -> String = \res =>
+  case res of
+    | Ok "success" => "matched success"
+    | Ok _         => "matched ok wildcard"
+    | Err _        => "matched err wildcard"
+    | _            => "matched fallback"
+in f (Ok "success")

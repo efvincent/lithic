@@ -1,5 +1,17 @@
 # Revision history for lithic
 
+## 0.9.0.0 -- 2026-05-06
+
+* Added Phase-7 pattern-coverage scaffolding module Compiler.PatternMatch.
+* Added case-branch redundancy checking (unreachable branch errors).
+* Added case-branch exhaustiveness checking with witness-based diagnostics.
+* Wired coverage checks into case inference path in the bidirectional checker.
+* Added HUnit unit tests for bool and closed-variant coverage/redundancy behavior.
+* Clarified current Phase-7 interim boundary:
+	* Exhaustiveness is enforced for finite and open constructor universes.
+	* Unreachable-branch errors are currently enforced for finite universes only.
+	* Open-universe redundancy detection is deferred pending fuller usefulness stabilization.
+  
 ## 0.8.1.0 -- 2026-05-06
 
 * Added `docs/language-spec.md` as a normative living core language specification to prevent semantic drift during active phase work.

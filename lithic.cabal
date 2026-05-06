@@ -1,6 +1,6 @@
 cabal-version:      3.4
 name:               lithic
-version:            0.8.0.0
+version:            0.9.0.0
 build-type:         Simple
 license:            NONE
 author:             Eric Vincent (arch)
@@ -35,6 +35,7 @@ library
     exposed-modules:  Compiler.AST
                     , Compiler.Lexer
                     , Compiler.Parser
+                    , Compiler.PatternMatch
                     , Compiler.TypeChecker
                     , Compiler.REPL
                     , Compiler.TUI
