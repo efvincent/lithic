@@ -158,6 +158,23 @@ These tests are useful as executable documentation for the current implementatio
 
 This document describes Lithic's current rank-2-oriented subsumption behavior. It is not claiming full arbitrary-rank inference or elaboration-heavy polymorphism yet. Future work can extend this foundation with richer diagnostics and broader rank coverage.
 
+## Interaction with Future Constraint Contexts
+
+Lithic reserves `=>` in type signatures for future trait/class-style constraint contexts. When that layer lands, rank-polymorphism and constraints will interact at the same boundary.
+
+Planned interpretation model:
+1. `forall` introduces universally quantified type variables.
+2. Constraint contexts introduce obligations over those quantified variables.
+3. Skolemization still protects polymorphic requirements; constraint solving must not bypass rigid-skolem safety.
+
+Example shape (future syntax meaning):
+
+```haskell
+forall a. NumLike a => a -> a
+```
+
+This should be read as: for every `a`, provided capability evidence for `NumLike a` is available, the function is valid. Operationally, elaboration is expected to carry explicit evidence (dictionary-style) across this boundary.
+
 ## Recommended references
 
 The resources below range from first-principles textbooks to implementation-focused papers.

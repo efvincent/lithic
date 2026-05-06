@@ -1,0 +1,6 @@
+-- Test parsing and type inference of all supported literals
+let i : Int = 42 in
+let f : Float = 3.14159 in
+let s : String = "Lithic" in
+let b : Bool = True
+in f

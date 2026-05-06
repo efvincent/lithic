@@ -1,0 +1,14 @@
+-- test/fixtures/case-literals.lithic
+-- Tests case expressions against multiple literal types and variants using | branches
+
+let f : Variant { Ok : String, Err : {} | a } -> String = \res =>
+  case res of
+    | Ok "success" => "Matched string literal"
+    | Ok _         => "Matched wildcard"
+    | Err _        => "Matched error wildcard"
+in
+let checkBool = \b =>
+  case b of
+    | True  => 1
+    | False => 0
+in checkBool True

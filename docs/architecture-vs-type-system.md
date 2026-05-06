@@ -59,5 +59,7 @@ By building the Bidirectional engine first, Lithic avoids massive rewrites later
 2. **Stateful Unification:** Effectful constraint solving with `TMeta`. *(Complete)*
 3. **Let-Polymorphism (HM):** `TForall`, `generalize`, and `instantiate` for `Let` bindings. *(Complete)*
 4. **Initial Rank-2 Subsumption:** `subsumes` now skolemizes expected `forall` types, instantiates inferred polymorphic types, and performs arrow subsumption before unification. *(Complete)*
+5. **Row Polymorphism + Lenses:** Structural rows (`TRowEmpty`/`TRowExtend`), `TRecord`, and native lens-update checking were integrated into the bidirectional checker. *(Complete)*
+6. **Variants, Literals, and Basic Patterns:** Primitive literal families, `TVariant`, case-branch checking, and pattern-driven environment extension were added. *(Complete)*
 
 The remaining roadmap item in this area is to broaden rank-polymorphism coverage and diagnostics beyond the current subsumption-focused implementation.

@@ -1,0 +1,5 @@
+-- Tests underscore-prefixed identifiers while preserving wildcard pattern `_`
+
+let _id = \_x => _x in
+case True of
+  | _ => _id 1

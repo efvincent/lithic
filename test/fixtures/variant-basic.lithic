@@ -1,0 +1,3 @@
+-- Check a structural variant against an open row type
+let x : Variant { Ok : Int | a } = Ok 42 
+in x

@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -Wno-unused-do-bind #-}
 module Compiler.Parser where
 
 import Data.Text (Text)
@@ -19,7 +20,9 @@ import Compiler.Lexer (Token(..), TokenClass(..))
 data Precedence
   = PrecLowest   -- ^ Base precedence for standard expressions
   | PrecAnn      -- ^ Type annotations (e.g., @expr : Type@)
+  | PrecAdd      -- ^ Addition / subtraction
   | PrecApp      -- ^ Function application (e.g., @f x@)
+  | PrecPrefix   -- ^ Unary prefix operations (e.g., @-x@)
   | PrecSelect   -- ^ Record field selection (e.g., @record.x@)
   deriving (Eq, Ord, Show, Generic)
 
@@ -28,7 +31,9 @@ precVal :: Precedence -> Int
 precVal = \case
   PrecLowest -> 0
   PrecAnn    -> 5
+  PrecAdd    -> 10
   PrecApp    -> 30
+  PrecPrefix -> 35
   PrecSelect -> 40
 
 data ParseError = MkParseError
@@ -63,27 +68,22 @@ mergeSpan :: SourceSpan -> SourceSpan -> SourceSpan
 mergeSpan (MkSourceSpan sl sc _ _) (MkSourceSpan _ _ el ec) =
   MkSourceSpan sl sc el ec
 
+-- | Single source of truth for Pratt binding power by token class.
+-- Keep implicit application routing centralized here to avoid drift.
+tokenPrecedence :: TokenClass -> Int
+tokenPrecedence = \case
+  cls | isAppStarter cls -> precVal PrecApp
+  TokDot                 -> precVal PrecSelect
+  TokMinus               -> precVal PrecAdd
+  _                      -> precVal PrecLowest
+
 -- | Checks the precedence of the upcoming token without consuming it.
 peekPrecedence :: forall st es. (st :> es) => State ParserState st -> Eff es Int
 peekPrecedence st = do
   mTok <- peek st
   pure case mTok of
     Nothing -> precVal PrecLowest
-    Just tok -> case tok.cls of
-      -- These tokens can start an expression, meaning they act as
-      -- implicit application operators if they appear next to an existing expression.
-      TokIdent _  -> precVal PrecApp
-      TokUIdent _ -> precVal PrecApp
-      TokInt _    -> precVal PrecApp
-      TokLParen   -> precVal PrecApp
-      TokLet      -> precVal PrecApp
-      TokLam      -> precVal PrecApp
-      TokColon    -> precVal PrecAnn
-      -- A left brace starts a record, parsing with application-level precedence
-      TokLBrace   -> precVal PrecApp
-      -- A dot indicates a record seelection, binding very tightly
-      TokDot      -> precVal PrecSelect
-      _           -> precVal PrecLowest
+    Just tok -> tokenPrecedence tok.cls
 
 -- | Recursively parses the interior fields of a record definition
 -- Handles standard fields separated by commas, and row extensions 
@@ -117,7 +117,7 @@ parseRecordFields startSpan st ex = do
       let emptyRec = RecEmpty t.span
       pure $ RecExtend (mergeSpan startSpan t.span) label val emptyRec
 
-    _ -> throw ex (MkParseError "Expected ',', '|', or '}' in record" startSpan)
+    _ -> throw ex (MkParseError "Expected comma (,) pipe (|) or right brace (}) in record" startSpan)
 
 -- | Parses a dot-separated list of path segments for deep record updates
 parsePathSegments
@@ -155,34 +155,97 @@ consumeTypeVars st ex = loop []
           v <- expectIdent st ex
           loop (v : acc)  
 
--- | Parses a Type signature
--- Type have a simple right-associative grammar, so a direct recursive descent parser
--- is sufficient.
-parseType 
+-- | Parses the interior of a structural row type: { x:Int, y:Bool | rest }
+parseRowType
+  :: forall st ex es. (st :> es, ex :> es)
+  => SourceSpan -> State ParserState st -> Exception ParseError ex ->Eff es Type
+parseRowType startSpan st ex = do
+  next <- peek st
+  case next of
+    Just t | t.cls == TokRBrace -> do
+      _ <- advance st
+      pure $ TRowEmpty (mergeSpan startSpan t.span)
+    _ -> do
+      -- Labels can be lowercase (records) or uppercase (variants)
+      labelTok <- advance st
+      label <- case labelTok of
+        Just t | TokIdent x <- t.cls -> pure x
+        Just t | TokUIdent x <- t.cls -> pure x
+        Just bad -> throw ex (MkParseError "Expected label identifier" bad.span)
+        Nothing -> throw ex (MkParseError "Unexpected EOF in row type" startSpan)
+      
+      expect TokColon st ex
+      ty <- parseType st ex
+      mNext <- advance st
+      case mNext of
+        Just t | t.cls == TokComma -> do
+          rest <- parseRowType startSpan st ex
+          pure $ TRowExtend (mergeSpan startSpan (getTypeSpan rest)) label ty rest
+        Just t | t.cls == TokPipe -> do
+          rest <- parseType st ex
+          endTok <- advance st
+          case endTok of
+            Just e | e.cls == TokRBrace ->
+              pure $ TRowExtend (mergeSpan startSpan e.span) label ty rest
+            _ -> throw ex (MkParseError "Expected '}' after row extension" startSpan)
+        Just t | t.cls == TokRBrace -> do
+          let emptyRow = TRowEmpty t.span
+          pure $ TRowExtend (mergeSpan startSpan t.span) label ty emptyRow
+        _ -> throw ex (MkParseError "Expceted ',', '|', or '}' in row type" startSpan)
+
+
+-- | Parses a single type atom or a type constructor application.
+parseTypeAtom 
   :: forall st ex es. (st :> es, ex :> es)
   => State ParserState st -> Exception ParseError ex -> Eff es Type
-parseType st ex = do
+parseTypeAtom st ex = do
   mTok <- advance st
-  leftTyp <- case mTok of
+  case mTok of
     Just tok -> case tok.cls of
       TokIdent x  -> pure $ TVar tok.span x
-      TokUIdent x ->
-        if x == "Int"
-        then pure $ TInt tok.span
-        else pure $ TVar tok.span x
+      TokUIdent x -> 
+        case x of
+          "Int"     -> pure $ TInt tok.span
+          "Float"   -> pure $ TFloat tok.span
+          "String"  -> pure $ TString tok.span
+          "Bool"    -> pure $ TBool tok.span
+          "Variant" -> do
+            -- We call parseTypeAtom here so it doesn't swallow arrows
+            innerTy <- parseTypeAtom st ex
+            pure $ TVariant (mergeSpan tok.span (getTypeSpan innerTy)) innerTy
+          "Record"  -> do
+            innerTy <- parseTypeAtom st ex
+            pure $ TRecord (mergeSpan tok.span (getTypeSpan innerTy)) innerTy
+          _         -> pure $ TNominal tok.span x   
+
+      -- Routes the { token to the row parser
+      TokLBrace -> parseRowType tok.span st ex
+
       TokForall -> do
         vars <- consumeTypeVars st ex
         expect TokDot st ex
+        -- The body of forall goes all the way to the end, so full parseType is needed
         innerTy <- parseType st ex
         pure $ TForall (mergeSpan tok.span (getTypeSpan innerTy)) vars innerTy
+      
       TokLParen   -> do
         inner <- parseType st ex
         expect TokRParen st ex
         pure inner
+      
       _ -> throw ex (MkParseError "Expected type" tok.span)
+    
     Nothing ->
       throw ex (MkParseError "Unexpected EOF" (MkSourceSpan 0 0 0 0))
-  -- Lookahead for the right-associative  `->`
+
+-- | Parses a Type Signature (handles right-associative arrows)
+parseType
+  :: forall st ex es. (st :> es, ex :> es)
+  => State ParserState st -> Exception ParseError ex -> Eff es Type
+parseType st ex = do
+  -- First parse the left-hand side as an atom
+  leftTyp <- parseTypeAtom st ex
+  -- Lookahead for the right-associative `->`
   nextTok <- peek st
   case nextTok of
     Just t | t.cls == TokArrow -> do
@@ -190,6 +253,31 @@ parseType st ex = do
       rightTyp <- parseType st ex
       pure $ TArrow (mergeSpan (getTypeSpan leftTyp) (getTypeSpan rightTyp)) leftTyp rightTyp
     _ -> pure leftTyp
+
+-- | Parses a pattern for use in bindings (Lambdas, Lets, Cases)
+parsePattern
+  :: forall st ex es. (st :> es, ex :> es)
+  => State ParserState st -> Exception ParseError ex -> Eff es Pattern
+parsePattern st ex = do
+  mTok <- advance st
+  case mTok of 
+    Just tok -> case tok.cls of
+      TokWildcard   -> pure $ PWildcard tok.span
+      TokIdent x    -> pure $ PVar tok.span x
+      TokInt val    -> pure $ PLit tok.span (LInt val)
+      TokFloat val  -> pure $ PLit tok.span (LFloat val)
+      TokString val -> pure $ PLit tok.span (LString val)
+      TokTrue       -> pure $ PLit tok.span (LBool True)
+      TokFalse      -> pure $ PLit tok.span (LBool False)
+      TokUIdent x   -> do
+        -- Variant pattern: `Ok p`
+        -- We expect a payload pattern immediately following the constructor
+        payload <- parsePattern st ex
+        pure $ PVariant (mergeSpan tok.span (getPatternSpan payload)) x payload
+
+        -- TODO: Add TokLBrace here later to support `\{x, y} => ...` record pattern
+      _ -> throw ex (MkParseError "Expected a pattern (variable, wildcard, literal, or variant)" tok.span)
+    Nothing -> throw ex (MkParseError "Unexpected EOF while parsing pattern" (MkSourceSpan 0 0 0 0))
 
 -- | The core Pratt parsing loop.
 parseExpr 
@@ -244,11 +332,18 @@ parseNud
   => Token -> State ParserState st -> Exception ParseError ex -> Eff es Expr
 parseNud tok st ex = 
   case tok.cls of
-    TokIdent x -> pure $ Var tok.span x
 
-    TokUIdent x -> pure $ Var tok.span x
+    TokIdent x    -> pure $ Var tok.span x
+    TokInt val    -> pure $ Lit tok.span (LInt val)
+    TokFloat val  -> pure $ Lit tok.span (LFloat val)
+    TokString val -> pure $ Lit tok.span (LString val)
+    TokTrue       -> pure $ Lit tok.span (LBool True)
+    TokFalse      -> pure $ Lit tok.span (LBool False)
 
-    TokInt val -> pure $ Lit tok.span val
+    TokMinus -> do
+      -- Parse the inner expression at prefix precedence to tightly bind `-`
+      right <- parseExpr (precVal PrecPrefix) st ex
+      pure $ Unary (mergeSpan tok.span (getSpan right)) UMinus right
 
     TokLParen -> do
       expr <- parseExpr (precVal PrecLowest) st ex
@@ -268,7 +363,7 @@ parseNud tok st ex =
         _ -> parseRecordFields tok.span st ex
 
     TokLam -> do
-      xTok <- expectIdent st ex
+      pat <- parsePattern st ex
 
       -- Check for optional type annotation (e.g. `\x : Int => ...`)
       next <- peek st
@@ -282,17 +377,52 @@ parseNud tok st ex =
       -- Enforce the Lean4/Rust style term delimiter
       expect TokFatArrow st ex
       body <- parseExpr (precVal PrecLowest) st ex
-      pure $ Lam (mergeSpan tok.span (getSpan body)) xTok mTy body
+      pure $ Lam (mergeSpan tok.span (getSpan body)) pat mTy body
 
     TokLet -> do
-      xTok <- expectIdent st ex
+      pat <- parsePattern st ex
+      -- Check for optional type annotation
+      next <- peek st
+      mTy <- case next of
+        Just t | t.cls == TokColon -> do
+          _ <- advance st
+          ty <- parseType st ex
+          pure (Just ty)
+        _ -> pure Nothing
       expect TokAssign st ex
-      -- Lowered from PrecBind to PrecLowest to allow type annotations
       val <- parseExpr (precVal PrecLowest) st ex
       expect TokIn st ex
       body <- parseExpr (precVal PrecLowest) st ex
-      pure $ Let (mergeSpan tok.span (getSpan body)) xTok val body
+      -- Desugar the annotation onto the value expression
+      let finalVal = case mTy of
+            Just ty -> Ann (mergeSpan (getTypeSpan ty) (getSpan val)) val ty
+            Nothing -> val
+      pure $ Let (mergeSpan tok.span (getSpan body)) pat finalVal body
       
+    TokCase -> do
+      scrutinee <- parseExpr (precVal PrecLowest) st ex
+      expect TokOf st ex
+      -- Recursively parse `| pattern => Expression`
+      let parseBranches branches = do
+            next <- peek st
+            case next of
+              Just t | t.cls == TokPipe -> do
+                _ <- advance st -- Consume `|`
+                pat <- parsePattern st ex
+                expect TokFatArrow st ex 
+                body <- parseExpr (precVal PrecLowest) st ex
+                parseBranches (branches ++ [(pat, body)])
+              _ -> pure branches
+      branches <- parseBranches []
+      if null branches
+      then throw ex $ MkParseError "Case expression must have at least one branch" tok.span
+      else pure $ Case (mergeSpan tok.span (getSpan (snd (last branches)))) scrutinee branches
+
+    TokUIdent x -> do
+      -- We parse the payload expression at Application precedence
+      payload <- parseExpr (precVal PrecApp) st ex
+      pure $ Variant (mergeSpan tok.span (getSpan payload)) x payload
+
     _ -> 
       throw ex (MkParseError ("Unexpected token in expression position: " 
       <> T.pack (show tok.cls)) tok.span)
@@ -307,6 +437,11 @@ parseLed left tok st ex = case tok.cls of
   TokColon -> do
     ty <- parseType st ex
     pure $ Ann (mergeSpan (getSpan left) (getTypeSpan ty)) left ty
+
+  TokMinus -> do
+    -- Parse the right-hand side at addition/subtraction precedence
+    right <- parseExpr (precVal PrecAdd) st ex
+    pure $ Binary (mergeSpan (getSpan left) (getSpan right)) OpSub left right
 
   -- | Parses record selection (record.x) OR deep updates (record.{ x.y := 42 })
   TokDot -> do
@@ -339,24 +474,30 @@ parseLed left tok st ex = case tok.cls of
       Just badTok -> throw ex $ MkParseError "Expected identifier or '{' after '.'" badTok.span
       Nothing -> throw ex $ MkParseError "Unexpected EOF after '.'" (getSpan left)
   
-  -- If we see a token that starts an expression, it is an implicit application.
-  -- We push it back so `parseExpr` can consume it naturally as a NUD.
-  cls | isAppStarter cls -> do
+  -- If token precedence is application-level, route through implicit application.
+  -- This stays in lockstep with `peekPrecedence` via `tokenPrecedence`.
+  cls | tokenPrecedence cls == precVal PrecApp -> do
     pushBack tok st
     right <- parseExpr (precVal PrecApp) st ex
     pure $ App (mergeSpan (getSpan left) (getSpan right)) left right
     
   _ -> throw ex (MkParseError "Unexpected token in operator position" tok.span)
-  where
-    isAppStarter = \case
-      TokIdent _  -> True
-      TokUIdent _ -> True
-      TokInt _    -> True
-      TokLParen   -> True
-      TokLet      -> True
-      TokLam      -> True
-      TokLBrace   -> True
-      _           -> False
+
+isAppStarter :: TokenClass -> Bool
+isAppStarter = \case
+  TokInt _    -> True
+  TokFloat _  -> True
+  TokString _ -> True
+  TokTrue     -> True
+  TokFalse    -> True
+  TokIdent _  -> True
+  TokUIdent _ -> True
+  TokLParen   -> True
+  TokLet      -> True
+  TokLam      -> True
+  TokLBrace   -> True
+  TokCase     -> True
+  _           -> False
 
 -- | Pure entry point for the Parser.
 runParser :: [Token] -> Either ParseError Expr
@@ -367,5 +508,11 @@ runParser toks =
         try \ex -> do
           expr <- parseExpr (precVal PrecLowest) st ex
           -- Ensure the entire token stream was consumed
-          expect TokEOF st ex
-          pure expr
+          -- Look at the remaining token instead of a blind expect
+          mNext <- peek st
+          case mNext of
+            Just t | t.cls == TokEOF -> pure expr
+            Just t ->
+              throw ex $ MkParseError
+                ("Expected EOF, but parser stopped early at token: " <> T.pack (show t.cls)) t.span
+            Nothing -> pure expr 

@@ -1,0 +1,4 @@
+-- Test unary and binary minus
+let x = -42 in
+let y = 100 - x
+in y

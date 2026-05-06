@@ -20,13 +20,16 @@ Run the golden test suite explicitly:
 cabal test lithic-test
 ```
 
-Golden cases are discovered from `test/golden/*.lithic` and compared against matching `.golden` files.
+Golden cases are discovered from `test/fixtures/*.lithic` and compared against matching snapshots in `test/golden/*.golden`.
 
 In the REPL:
 
 - Enter an expression such as `42`, `\x => x`, `\x : Int => x`, or `let id = \x => x in id 5`.
 - Record expressions and selections are supported, for example `{ x = 1, y = 2 }` and `r.x`.
 - Lens-style updates are supported with `:=` (set) and `%=` (modify), for example `state.{ player.hp := 99 }` and `state.{ score %= \s => s }`.
+- Case expressions are supported, for example `case v of | Ok x => x | Err _ => 0`.
+- Primitive literals currently include `Int`, `Float`, `String`, and `Bool` (`True`/`False`).
+- Prefix unary minus and infix subtraction are supported (`-x`, `x - y`).
 - Successful input is rendered as two lines: `[AST] <show ast>` followed by `[Type] <show type>`.
 - Lexing, parsing, and type errors are shown inline in the same pane.
 - Press Enter to submit the current editor contents.
@@ -61,7 +64,7 @@ r.{ x %= \v => 99 }
 - [Project Plan and Architecture Record](docs/project-plan.md) captures the longer-term language vision, locked-in architectural decisions, and the current phase roadmap.
 - [Optimizations and Technical Debt](docs/optimizations.md) describes performance bottlenecks and issues to be addressed in the future.
 
-For concrete runnable behavior snapshots, inspect the golden tests under `test/golden/`, especially `record-basic`, `row-shift`, `lens-set`, `lens-modify`, and the corresponding negative tests.
+For concrete runnable behavior snapshots, inspect `test/fixtures/` and matching outputs in `test/golden/`, especially `record-basic`, `row-shift`, `lens-set`, `lens-modify`, `variant-basic`, `literals`, `minus-basic`, and `minus-precedence`.
 
 ## How To Read The Docs
 
@@ -88,6 +91,7 @@ Use this quick rule when choosing a doc:
 - `src/Compiler/` contains compiler and REPL modules.
 - `app/Main.hs` wires executable startup.
 - `test/Main.hs` contains the Tasty golden test harness.
-- `test/golden/` contains discovered `.lithic` inputs and expected `.golden` outputs.
+- `test/fixtures/` contains discovered `.lithic` test inputs.
+- `test/golden/` contains expected `.golden` outputs.
 - `cabal.project` configures local Cabal project behavior.
 - `lithic.cabal` defines package components and dependencies.

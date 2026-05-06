@@ -16,7 +16,7 @@ import Bluefin.Exception (Exception, throw)
 import Bluefin.Reader (Reader, ask, runReader)
 import Bluefin.State (State, get, modify)
 
-import Compiler.AST (Expr(..), Type(..), SourceSpan, getTypeSpan, PathSegment (..), UpdateOp (..), getSpan)
+import Compiler.AST 
 import Lens.Micro ((.~), (%~))
 import Data.Function ((&))
 
@@ -55,9 +55,48 @@ freshMeta sp st = do
   modify st (#nextMeta .~ (mId + 1))
   pure $ TMeta sp mId
 
+data NumericClass
+  = NumericInt
+  | NumericFloat
+  | NumericMeta
+  | NumericNonNumeric
+
+classifyNumeric :: Type -> NumericClass
+classifyNumeric = \case
+  TInt _   -> NumericInt
+  TFloat _ -> NumericFloat
+  TMeta{}  -> NumericMeta
+  _        -> NumericNonNumeric
+
 --------------------------------
 -- Typechecker implementation
 --------------------------------
+
+-- | Checks a pattern against an expected type, returning the new environment bindings
+checkPattern
+  :: forall st ex es. (st :> es, ex :> es)
+  => State TCState st -> Exception TypeError ex -> Pattern -> Type -> Eff es [(Text, Type)]
+checkPattern st ex pat expectedTy = do
+  forcedTy <- force st expectedTy
+  case pat of 
+    PVar _ x -> pure [(x, forcedTy)]
+    PWildcard _ -> pure []
+    PLit sp lit -> do
+      let litTy = case lit of
+            LInt _    -> TInt sp
+            LFloat _  -> TFloat sp
+            LString _ -> TString sp
+            LBool _   -> TBool sp
+      unify st ex forcedTy litTy sp
+      pure []
+    PVariant sp label innerPat -> do
+      rowMeta <- freshMeta sp st
+      innerMeta <- freshMeta (getPatternSpan innerPat) st
+      -- Constrain the expected type to be a variant containing this label
+      unify st ex forcedTy (TVariant sp (TRowExtend sp label innerMeta rowMeta)) sp
+      checkPattern st ex innerPat innerMeta
+    PRecord sp _ ->
+      throw ex $ MkTypeError "Record patterns not yet fully implemented" sp
 
 -- | Synthesize a type for an expression (Inference Phase)
 infer
@@ -65,8 +104,62 @@ infer
   => State TCState st -> Reader Env r -> Exception TypeError ex -> Expr -> Eff es Type
 infer st env ex expr = 
   case expr of
-    Lit sp _ -> pure $ TInt sp
-    
+    Lit sp lit -> pure case lit of
+      LInt _    -> TInt sp
+      LFloat _  -> TFloat sp
+      LString _ -> TString sp
+      LBool _   -> TBool sp
+
+    Unary sp UMinus e -> do
+      ty <- infer st env ex e
+      forcedTy <- force st ty
+      case classifyNumeric forcedTy of
+        NumericInt   -> pure $ TInt sp
+        NumericFloat -> pure $ TFloat sp
+        NumericMeta  ->
+          throw ex $ MkTypeError
+            "Ambiguous unary minus on unresolved operand; add a type annotation to disambiguate Int vs Float."
+            sp
+        NumericNonNumeric ->
+          throw ex $ MkTypeError "Cannot apply unary minus to a non-numeric type." (getSpan e)
+
+    Binary sp OpSub e1 e2 -> do
+      ty1 <- infer st env ex e1
+      ty2 <- infer st env ex e2
+      forcedTy1 <- force st ty1
+      forcedTy2 <- force st ty2
+      case (classifyNumeric forcedTy1, classifyNumeric forcedTy2) of
+        (NumericInt, NumericInt) -> pure $ TInt sp
+        (NumericFloat, NumericFloat) -> pure $ TFloat sp
+
+        (NumericInt, NumericMeta) -> do
+          unify st ex ty2 (TInt (getSpan e2)) sp
+          pure $ TInt sp
+        (NumericMeta, NumericInt) -> do
+          unify st ex ty1 (TInt (getSpan e1)) sp
+          pure $ TInt sp
+
+        (NumericFloat, NumericMeta) -> do
+          unify st ex ty2 (TFloat (getSpan e2)) sp
+          pure $ TFloat sp
+        (NumericMeta, NumericFloat) -> do
+          unify st ex ty1 (TFloat (getSpan e1)) sp
+          pure $ TFloat sp
+
+        (NumericInt, NumericFloat) ->
+          throw ex $ MkTypeError "Subtraction operands must both be Int or both be Float." sp
+        (NumericFloat, NumericInt) ->
+          throw ex $ MkTypeError "Subtraction operands must both be Int or both be Float." sp
+
+        (NumericMeta, NumericMeta) ->
+          throw ex $ MkTypeError
+            "Ambiguous subtraction on unresolved operands; add a type annotation to disambiguate Int vs Float."
+            sp
+
+        (NumericNonNumeric, _) ->
+          throw ex $ MkTypeError "Left operand of subtraction must be numeric." (getSpan e1)
+        (_, NumericNonNumeric) ->
+          throw ex $ MkTypeError "Right operand of subtraction must be numeric." (getSpan e2)
     Var sp x -> do
       currentEnv <- ask env
       case lookup x currentEnv.bindings of
@@ -75,17 +168,16 @@ infer st env ex expr =
         Nothing -> throw ex $ MkTypeError ("Unbound variable: " <> x) sp
 
     -- Lambdas (Both Annotated and Unannotated)
-    Lam sp param mAnn body -> do
+    Lam sp pat mAnn body -> do
       -- Determine the parameter type: use annotation if present, otherwise guess via TMeta
       paramTy <- case mAnn of
         Just ty -> pure ty
         Nothing -> freshMeta sp st
-      
-      -- Create the new extended environment value
+
+      bindings <- checkPattern st ex pat paramTy
       currentEnv <- ask env
-      let newEnv = MkEnv ((param, paramTy) : currentEnv.bindings)
-      
-      -- Run a strictly scoped local Reader effect for the body
+      let newEnv = MkEnv (bindings ++ currentEnv.bindings)
+
       bodyTy <- runReader newEnv \newEnvHandle ->
         infer st newEnvHandle ex body
         
@@ -126,21 +218,41 @@ infer st env ex expr =
       pure expectedTy
 
     -- Let Bindings
-    Let _ name val body -> do
-      -- 1. Infer the type of the value being bound
+    Let _ pat val body -> do
       rawValTy <- infer st env ex val
-      
-      -- 2. Deeply resolve it
       zonkedValTy <- zonk st rawValTy
-      e <- ask env
-      polyTy <- generalize st e zonkedValTy
 
-      -- 3. Extend the environment with the generalized polymorphic type
-      let newEnv = MkEnv ((name, polyTy) : e.bindings)
+      -- Let-generalization is restricted to simple variable bindings
+      bindings <- case pat of
+        PVar _ name -> do
+          e <- ask env
+          polyTy <- generalize st e zonkedValTy
+          pure [(name, polyTy)]
+        _ -> checkPattern st ex pat zonkedValTy
+
+      e <- ask env
+      let newEnv = MkEnv (bindings ++ e.bindings)
       
-      -- 4. Infer the body in the strictly scoped new environment
       runReader newEnv \newEnvHandle ->
         infer st newEnvHandle ex body
+
+    Case sp scrutinee branches -> do
+      scrutTy <- infer st env ex scrutinee
+      resultTy <- freshMeta sp st
+      -- Enforce that all branches match the scrutinee type and yield the same result type
+      let checkBranch (branchPat, branchBody) = do
+            bindings <- checkPattern st ex branchPat scrutTy
+            currentEnv <- ask env
+            let newEnv = MkEnv (bindings ++ currentEnv.bindings)
+            runReader newEnv \newEnvHandle ->
+              check st newEnvHandle ex branchBody resultTy
+      mapM_ checkBranch branches
+      pure resultTy
+
+    Variant sp label payload -> do
+      payloadTy <- infer st env ex payload
+      rowMeta <- freshMeta sp st
+      pure $ TVariant sp (TRowExtend sp label payloadTy rowMeta)
 
     -- ------- RECORD EXPRESSIONS --------
     
@@ -196,38 +308,35 @@ check st envHandle ex expr expectedTy = do
   
   case (expr, forcedTy) of
     -- 2. Checking a Lambda against a known Arrow Type
-    (Lam _ param mAnn body, TArrow _ domain range) -> do
-      -- 1. Enforce the annotation against the expected domain if present
+    (Lam _ pat mAnn body, TArrow _ domain range) -> do
       case mAnn of
-        -- FIX: Use the specific span of the annotation for precise error reporting
         Just annTy -> unify st ex annTy domain (getTypeSpan annTy)
         Nothing -> pure ()
-        
+      bindings <- checkPattern st ex pat domain
       env <- ask envHandle
-      let newEnv = MkEnv ((param, domain) : env.bindings)
+      let newEnv = MkEnv (bindings ++ env.bindings)
       runReader newEnv \newEnvHandle ->
         check st newEnvHandle ex body range
         
     -- 3. Checking a Lambda against an unbound Meta-variable
-    (Lam sp param mAnn body, TMeta _ mId) -> do
-      -- 1. If annotated, use the annotation as the domain. Otherwise, guess.
+    (Lam sp pat mAnn body, TMeta _ mId) -> do
       domain <- case mAnn of
         Just annTy -> pure annTy
         Nothing -> freshMeta sp st
-        
+
       range <- freshMeta sp st
-      
-      -- Constrain the meta-variable to the arrow type
       bindMeta st ex mId (TArrow sp domain range) sp
-      
+      bindings <- checkPattern st ex pat domain
       env <- ask envHandle
-      let newEnv = MkEnv ((param, domain) : env.bindings)
+      let newEnv = MkEnv (bindings ++ env.bindings)
       runReader newEnv \newEnvHandle ->
         check st newEnvHandle ex body range
 
     -- 4. Checking a Lambda against anything else is a hard error
     (Lam sp _ _ _, _) -> 
-      throw ex $ MkTypeError "Type mismatch: Expected a non-function type, but got a lambda." sp
+      throw ex $ MkTypeError
+        ("Type mismatch: Lambda requires a function type, but expected " <> T.pack (show forcedTy))
+        sp
 
     -- 5. The Bridge Fallback: Infer the actual type and use the subsumption bridge
     _ -> do
@@ -288,6 +397,7 @@ zonk st ty = do
     TRowExtend sp label fieldTy rest ->
       TRowExtend sp label <$> zonk st fieldTy <*> zonk st rest
     TRecord sp rowTy -> TRecord sp <$> zonk st rowTy
+    TVariant sp rowTy -> TVariant sp <$> zonk st rowTy
     _ -> pure forcedTy
 
 -- | Unify tow types, updating the substitution state if necessary.
@@ -301,7 +411,7 @@ unify st ex t1 t2 sp = do
     -- Both are the same meta-variable
     (TMeta _ m1, TMeta _ m2) | m1 == m2 -> pure ()
 
-    -- Mind meta-variable to a type
+    -- Bind meta-variable to a type
     (TMeta _ m, _) -> bindMeta st ex  m ty2 sp
     (_, TMeta _ m) -> bindMeta st ex  m ty1 sp
 
@@ -309,12 +419,19 @@ unify st ex t1 t2 sp = do
     (TSkolem _ s1 _, TSkolem _ s2 _) | s1 == s2 -> pure ()
 
     (TInt _, TInt _) -> pure ()
-    
+    (TFloat _, TFloat _) -> pure ()
+    (TString _, TString _) -> pure ()
+    (TBool _, TBool _) -> pure ()
+        
     (TArrow _ p1 r1, TArrow _ p2 r2) -> do
       unify st ex p1 p2 sp
       unify st ex r1 r2 sp
 
     (TVar _ a, TVar _ b) | a == b -> pure ()
+
+    -- Unify structural variants by unifying their underlying rows
+    (TVariant _ row1, TVariant _ row2) ->
+      unify st ex row1 row2 sp
 
     -- ---- ROW POLYMORPHISM RULES ----    
     (TRowEmpty _, TRowEmpty _) -> pure ()
@@ -436,6 +553,7 @@ occurs st mId ty = do
       fieldOccurs <- occurs st mId fieldTy
       if fieldOccurs then pure True else occurs st mId rest
     TRecord _ rowTy -> occurs st mId rowTy
+    TVariant _ rowTy -> occurs st mId rowTy
     _ -> pure False
 
 -- | instantiates a polymorphic type by replaceing its quantified variables
@@ -481,6 +599,7 @@ replaceMetas nameMap ty =
     TRowExtend sp label fieldTy rest ->
       TRowExtend sp label (replaceMetas nameMap fieldTy) (replaceMetas nameMap rest)
     TRecord sp rowTy -> TRecord sp (replaceMetas nameMap rowTy)
+    TVariant sp rowTy -> TVariant sp (replaceMetas nameMap rowTy)
     _ -> ty
 
 -- | replaces bound type variables (TVar) with their instantiated concrete types.
@@ -499,6 +618,7 @@ subBound subMap ty =
     TRowExtend sp label fieldTy rest ->
       TRowExtend sp label (subBound subMap fieldTy) (subBound subMap rest)
     TRecord sp rowTy -> TRecord sp (subBound subMap rowTy)
+    TVariant sp rowTy -> TVariant sp (subBound subMap rowTy)
     _ -> ty -- Catches TMeta and TSkolem
     
 -- | Generate a fresh rigit skolem constant
@@ -541,6 +661,7 @@ ftvType st ty = do
       pure $ IS.union fieldVars restVars
     TForall _ _ inner -> ftvType st inner
     TRecord _ rowTy -> ftvType st rowTy
+    TVariant _ rowTy -> ftvType st rowTy
     _ -> pure IS.empty
 
 -- | Collects all unbound meta-variable IDs across the entire lexical environment
