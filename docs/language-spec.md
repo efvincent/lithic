@@ -284,18 +284,21 @@ Lens updates:
 
 Nominal path resolution is intentionally stubbed for now and reports targeted type errors.
 
-### 5.6 Variants and Pattern-Driven Environments (Stable core, Provisional exhaustiveness)
+### 5.6 Variants and Pattern-Driven Environments (Stable core, Stable case-branch coverage)
 
 - Variant terms are typed through `TVariant` over row types.
 - Pattern checking extends local environments for branch/body checking.
 - Case branch result types must reconcile via checker constraints.
 
-Current Phase-7 interim boundary:
+Current implemented Phase-7 boundary:
 - Exhaustiveness is enforced for both finite and open constructor universes.
 - Redundancy (unreachable-branch) errors are enforced for both finite and open constructor universes.
 - For open literal/open variant spaces, usefulness and redundancy rely on exact observed literal/constructor heads plus wildcard/default decomposition rather than total-domain enumeration.
 
-Exhaustiveness/reachability hard errors are not yet fully implemented (Phase 7 target).
+Current deferred scope:
+- Guard-aware usefulness semantics.
+- Exhaustiveness/redundancy checks for grouped function-equation clauses.
+- Exhaustiveness/redundancy checks for binder patterns in `let` and lambda parameters.
 
 ### 5.7 Numeric Operators (Stable current policy, Provisional long-term model)
 
@@ -338,13 +341,13 @@ After Phase 7 completes (matrix-based exhaustiveness + reachability integrated),
 2. A stricter distinction between Surface and Core syntax with explicit elaboration relation.
 3. A more complete metatheory outline for type soundness-facing invariants.
 
-## 9. Phase-7 Addendum Draft (Maranget Matrix)
+## 9. Phase-7 Addendum (Maranget Matrix)
 
-Status: Provisional draft aligned to planned implementation. This section becomes fully normative once `Compiler.PatternMatch` lands and tests are merged.
+Status: Normative for implemented `case`-branch exhaustiveness/redundancy behavior.
 
 ### 9.1 Scope and Activation
 
-Covered constructs (Phase 7 target):
+Covered constructs:
 1. `case` branch sets only.
 
 Deferred to follow-up phase work:
@@ -355,12 +358,12 @@ Deferred to follow-up phase work:
 Diagnostic level:
 1. Hard type errors (reject program).
 
-Activation target:
-1. First release containing `Compiler.PatternMatch` integration in `infer` for `Case` nodes.
+Activation:
+1. Enabled in the release containing `Compiler.PatternMatch` integration in `infer` for `Case` nodes.
 
 ### 9.2 Pattern Matrix Core Objects
 
-Planned core representation:
+Core representation:
 
 ```text
 Occurrence o ::= Root
@@ -381,7 +384,7 @@ Initial constructor universe policy:
 2. Variants (`TVariant` over row):
        - Constructors are enumerated from statically known row labels when row is closed enough after forcing/zonking.
        - If variant row remains open/unknown, algorithm may not claim totality from constructor enumeration alone; default/wildcard coverage is required.
-       - Interim implementation note: open-row universes still participate in exhaustiveness via default coverage, while redundancy checks are deferred.
+       - Open-row universes participate in both exhaustiveness and redundancy through default/wildcard decomposition.
 3. Record patterns:
        - Kept provisional until parser support for `PRecord` is complete.
 
@@ -392,7 +395,7 @@ Normalization policy:
 
 ### 9.3 Specialization and Default Operations
 
-Planned operators:
+Operators:
 
 ```text
 specialize(P, c) -> P_c
@@ -409,7 +412,7 @@ Semantics:
 
 ### 9.4 Exhaustiveness Judgment
 
-Planned judgment shape:
+Judgment shape:
 
 ```text
 Exhaustive(T, P) => Covered | Missing(W)
@@ -429,7 +432,7 @@ Witness policy:
 
 ### 9.5 Reachability / Redundancy Judgment
 
-Planned usefulness judgment:
+Usefulness judgment:
 
 ```text
 Useful(P_prefix, r) => Useful | Redundant
@@ -447,7 +450,7 @@ Guard policy:
 
 ### 9.6 Diagnostic Contract Addendum
 
-Planned user-visible errors:
+User-visible errors:
 
 ```text
 Type Error: Non-exhaustive patterns in case at <span>. Missing: <w1>, <w2>, ...
@@ -477,7 +480,7 @@ Expected output contract for failures:
 
 ### 9.8 Implementation Cross-References
 
-Planned modules and touch points:
+Modules and touch points:
 1. New module: `src/Compiler/PatternMatch.hs`.
 2. Typechecker integration: `infer` path for `Case` in `src/Compiler/TypeChecker.hs`.
 3. Pipeline visibility: golden harness in `test/Main.hs` through existing REPL/type error formatting path.

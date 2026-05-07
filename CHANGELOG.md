@@ -1,5 +1,12 @@
 # Revision history for lithic
 
+## 0.9.2.0 -- 2026-05-07
+
+* Promoted the Phase-7 addendum in `docs/language-spec.md` from provisional draft status to normative status for implemented `case`-branch coverage behavior.
+* Reworded stale "planned/interim" sections in the addendum to reflect current implemented semantics for open-universe exhaustiveness and redundancy.
+* Clarified current deferred scope boundaries in the language spec (guards, grouped function equations, and binder-pattern coverage outside `case`).
+* Marked the final Phase-7 roadmap task complete in `docs/project-plan.md` (addendum promotion to normative).
+
 ## 0.9.1.0 -- 2026-05-07
 
 * Completed Phase-7 open-universe usefulness/redundancy enforcement for case branches.

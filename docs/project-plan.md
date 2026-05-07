@@ -124,7 +124,7 @@ Use this checklist in PR descriptions whenever lexer/parser/typechecker behavior
   * [x] Upgrade `docs/language-spec.md` with interim pattern-coverage and redundancy boundary notes.
   * [x] Complete open-universe usefulness/redundancy algorithm so unreachable-branch checks are enforced beyond finite constructor universes.
     - Policy detail: for `Int`/`Float`/`String` and open variant rows, rely on exact literal/constructor head usefulness plus default/wildcard decomposition rather than attempting total value-space enumeration.
-  * [ ] Promote Phase-7 addendum from provisional to fully normative once open-universe redundancy handling stabilizes.
+  * [x] Promote Phase-7 addendum from provisional to fully normative once open-universe redundancy handling stabilizes.
 
 ### 📅 Phase 8: Evaluation Semantics (Interpreter)
 * **Objective:** Build an internal evaluator to actually execute Lithic code.
