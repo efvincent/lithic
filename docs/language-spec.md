@@ -292,8 +292,8 @@ Nominal path resolution is intentionally stubbed for now and reports targeted ty
 
 Current Phase-7 interim boundary:
 - Exhaustiveness is enforced for both finite and open constructor universes.
-- Redundancy (unreachable-branch) errors are currently enforced for finite universes only.
-- For open universes (for example open variant rows), redundancy detection is intentionally deferred until open-world usefulness is fully stabilized.
+- Redundancy (unreachable-branch) errors are enforced for both finite and open constructor universes.
+- For open literal/open variant spaces, usefulness and redundancy rely on exact observed literal/constructor heads plus wildcard/default decomposition rather than total-domain enumeration.
 
 Exhaustiveness/reachability hard errors are not yet fully implemented (Phase 7 target).
 
@@ -376,6 +376,8 @@ Initial constructor universe policy:
 1. Literal domains:
        - `Bool` is finite: `{True, False}`.
        - `Int`, `Float`, and `String` are treated as effectively open/infinite for coverage; only observed literal heads participate in specialization, with default branch required for totality.
+       - Literal-head usefulness/redundancy for open or infinite domains is based on exact head equality of observed literals (for example `Ok "success"`), plus wildcard/default decomposition.
+       - This does not require global enumeration of every literal value in the domain.
 2. Variants (`TVariant` over row):
        - Constructors are enumerated from statically known row labels when row is closed enough after forcing/zonking.
        - If variant row remains open/unknown, algorithm may not claim totality from constructor enumeration alone; default/wildcard coverage is required.
@@ -437,7 +439,8 @@ Semantics:
 1. A branch row `r` is redundant iff it is not useful relative to previously accepted rows `P_prefix`.
 2. Redundancy check runs in source order for each case branch.
 3. In Phase 7 target behavior, every redundant branch is reported as an error; multi-branch reporting is preferred if diagnostics accumulation remains practical.
-4. Interim implementation boundary: redundancy reporting is currently restricted to finite constructor universes; open-universe redundancy remains deferred.
+4. Open-universe rows participate in redundancy through default/wildcard decomposition and constructor/payload projection; finite-universe enumeration is only required where domains are statically finite.
+5. Capability/type-class resolution for operators is orthogonal to pattern usefulness: overloaded numeric operators do not change literal-pattern head matching semantics.
 
 Guard policy:
 1. Pattern guards are not part of Phase 7 enforcement; this judgment applies to unguarded branch sets only.

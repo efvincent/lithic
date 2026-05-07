@@ -108,6 +108,7 @@ Use this checklist in PR descriptions whenever lexer/parser/typechecker behavior
   * Keep the current `Int`/`Float` fast path for early compiler phases.
   * Introduce a constraint-driven numeric capability layer so operator typing is not hard-coded to a fixed primitive set.
   * Route arithmetic through that capability layer so future numeric types are uniformly supported.
+  * Keep pattern-coverage semantics independent from operator capability resolution: literal-pattern usefulness uses exact observed head matching plus wildcard/default reasoning, not capability-driven domain enumeration.
   * Defer numeric defaulting policy until the constraint layer exists; avoid ad-hoc implicit widening/defaulting in the checker.
 * **Extensibility consequence:**
   * Adding new numeric behavior through libraries alone is not sufficient today; compiler-level operator typing must move to capability constraints to support library-extensible numerics.
@@ -121,7 +122,8 @@ Use this checklist in PR descriptions whenever lexer/parser/typechecker behavior
   * [x] Wire exhaustiveness checking into the bidirectional `Case` evaluation.
   * [x] Add regression coverage for open-variant row behavior (`open-variant-redundancy`).
   * [x] Upgrade `docs/language-spec.md` with interim pattern-coverage and redundancy boundary notes.
-  * [ ] Complete open-universe usefulness/redundancy algorithm so unreachable-branch checks are enforced beyond finite constructor universes.
+  * [x] Complete open-universe usefulness/redundancy algorithm so unreachable-branch checks are enforced beyond finite constructor universes.
+    - Policy detail: for `Int`/`Float`/`String` and open variant rows, rely on exact literal/constructor head usefulness plus default/wildcard decomposition rather than attempting total value-space enumeration.
   * [ ] Promote Phase-7 addendum from provisional to fully normative once open-universe redundancy handling stabilizes.
 
 ### 📅 Phase 8: Evaluation Semantics (Interpreter)

@@ -87,6 +87,14 @@ patternCoverageUnitTests =
         case checkCasePatterns tNested [pOkAAny, pErrAny] of
           Left (NonExhaustive (PVariant _ "Ok" (PVariant _ "B" _) : _)) -> pure ()
           other -> assertFailure ("Expected missing Ok (B _) witness, got: " <> show other)
+
+    , testCase "open variant wildcard then constructor is redundant" $
+        case checkCasePatterns tOpenResult [pWild, pOkAny] of
+          Left (Redundant _) -> pure ()
+          other -> assertFailure ("Expected Redundant error for open variant, got: " <> show other)
+
+    , testCase "open variant literal refinement keeps next constructor useful" $
+        checkCasePatterns tOpenResult [pOkSuccess, pOkAny, pErrAny, pWild] @?= Right ()
     ]
 
 sp :: SourceSpan
@@ -133,3 +141,12 @@ tNested =
   TVariant sp
     (TRowExtend sp "Ok" tInnerNested
       (TRowExtend sp "Err" tUnitRec (TRowEmpty sp)))
+
+pOkSuccess :: Pattern
+pOkSuccess = PVariant sp "Ok" (PLit sp (LString "success"))
+
+tOpenResult :: Type
+tOpenResult = 
+  TVariant sp
+    (TRowExtend sp "Ok" (TString sp)
+      (TRowExtend sp "Err" tUnitRec (TVar sp "r")))
