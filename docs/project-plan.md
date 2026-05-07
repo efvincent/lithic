@@ -8,6 +8,20 @@
 * **Type System:** Advanced structural typing featuring Rank-2 Polymorphism, Row Polymorphism, Existential Types, and Bidirectional Typechecking.
 * **Developer Experience:** A rich interactive REPL, an integrated LSP server, and native debugging capabilities.
 
+### Documentation Goal (Book-Scale)
+Lithic also targets a long-form educational deliverable: documentation approaching book length that teaches what is necessary to understand and build a compiler in this style.
+
+This documentation track is a first-class project goal, not a post-hoc artifact.
+
+Primary instructional pillars include:
+1. Parsing architecture and Pratt parsing technique.
+2. Bidirectional type checking and unification strategy.
+3. Pattern coverage analysis (exhaustiveness and redundancy/usefulness).
+4. Completeness boundaries and where formal guarantees do or do not currently hold.
+5. Practical effect management in Haskell using Bluefin.
+6. Operational semantics choices (small-step vs big-step, strict vs lazy) and evaluator construction.
+7. Backend engineering techniques (C code generation and potential LLVM pathways).
+
 ## 2. Core Architectural Decisions
 These decisions are locked in and should guide all future implementation phases:
 * **Compiler Implementation:** Haskell (targeting GHC 9.14.1+ for LTS stability and zero-cost abstraction optimization).
@@ -49,6 +63,32 @@ Required in any behavior-changing parser/typechecker change:
 2. Update `README.md` user-facing examples/contracts if external behavior changed.
 3. Update fixtures/golden snapshots if observable output changed.
 4. Keep this roadmap aligned when phase scope or semantic commitments shift.
+
+### Documentation Program (Book Track)
+Book-track documentation lives alongside implementation and is continuously updated during phase work.
+
+Suggested chapter map (living outline):
+1. Compiler architecture and phase boundaries in Lithic.
+2. Lexer and Pratt parser internals.
+3. Bidirectional typing, subsumption, and unification internals.
+4. Row polymorphism, records/variants, and lens update typing.
+5. Pattern matrix coverage algorithms (exhaustiveness/redundancy/usefulness).
+6. Effectful compiler engineering in Haskell with Bluefin.
+7. Evaluator semantics and formal rule design.
+8. Backend lowering strategy (C now, LLVM-oriented path later).
+9. Tooling and ergonomics (REPL/TUI/LSP-facing diagnostics discipline).
+
+Documentation quality bar:
+1. Explain both mechanism (how) and rationale (why).
+2. Include concrete implementation references and pseudocode/rule sketches where appropriate.
+3. Distinguish normative implemented behavior from planned/future behavior.
+4. Keep examples synchronized with current language syntax and diagnostics.
+
+Documentation cadence policy:
+1. Per feature PR: include at least one documentation delta in either `docs/language-spec.md` or a chapter-oriented `docs/` companion file when behavior, algorithm contracts, or architecture understanding changes.
+2. Per phase milestone: produce or substantially revise one chapter-level document section capturing design trade-offs and implementation details.
+3. Weekly (or every 5-10 merged PRs, whichever comes first): run an editorial consolidation pass to merge scattered notes into coherent chapter narrative.
+4. Per release tag: ensure chapter index/progress markers are updated and link to newly completed sections.
 
 ### PR Checklist (Semantic Changes)
 Use this checklist in PR descriptions whenever lexer/parser/typechecker behavior changes.

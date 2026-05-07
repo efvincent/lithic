@@ -1,5 +1,15 @@
 # Revision history for lithic
 
+## 0.9.4.0 -- 2026-05-07
+
+* Added a first-class documentation program goal in `docs/project-plan.md` targeting book-scale compiler documentation.
+* Added a chapter-oriented documentation track covering parsing, bidirectional typing, coverage analysis, completeness boundaries, Bluefin usage, evaluator semantics, and backend strategy.
+* Added documentation quality and cadence policy (Mode 2):
+	* per-feature PR documentation deltas,
+	* per-phase chapter-level updates,
+	* weekly (or every 5-10 PRs) editorial consolidation,
+	* release-time chapter progress synchronization.
+
 ## 0.9.3.0 -- 2026-05-07
 
 * Completed the post-Phase-7 formalization checkpoint in `docs/language-spec.md`.
