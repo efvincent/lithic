@@ -1,4 +1,3 @@
-{-# OPTIONS_GHC -Wno-unused-top-binds #-}
 -- | Phase-7 pattern coverage checks for case branches.
 --
 -- This module exposes a single entry point, 'checkCasePatterns', which reports:
@@ -55,6 +54,7 @@ type Matrix = [Row]
 data Constructor
   = ConBool Bool
   | ConVariant Text Type
+  | ConLit Literal
   deriving (Show, Eq, Generic)
 
 -- | Constructor universe classification for the current head type.
@@ -63,17 +63,14 @@ data Universe
   | Open 
   deriving (Show, Eq, Generic)
 
--- | Check case-pattern coverage for one scrutinee type.
---
--- Redundancy is currently enforced only for finite constructor universes.
--- For open universes, this checker still enforces exhaustiveness (via default
--- coverage) but skips redundancy until open-world usefulness is fully refined.
+-- | Check case-pattern coverage 
+-- 
+-- Reduncancy is enforced in source order for both finite and open universes.
+-- Open universes rely on default / wildcard decomposition in usefull checks.
 checkCasePatterns :: Type -> [Pattern] -> Either CoverageError ()
 checkCasePatterns scrutTy pats = do
   let matrix = map (\p -> [p]) pats
-  case constructorUniverse scrutTy of
-    Finite _ -> checkRedundant [scrutTy] [] pats
-    Open -> Right ()
+  checkRedundant [scrutTy] [] pats
   case missingRow [scrutTy] matrix of
     Nothing -> Right ()
     Just witnessRow ->
@@ -124,7 +121,7 @@ useful tys matrix query =
       -- Variant payload-aware usefulness:
       -- only rows with the same constructor label participate in payload checking.
       | PVariant _ label inner <- qHead ->
-          case lookupVariantPayloadType ty label of
+          case lookupKnownVariantPayloadType ty label of
             Just payloadTy ->
               let payloadMatrix = payloadMatrixForLabel label matrix
               in useful (payloadTy : restTys) payloadMatrix (inner : qTail)
@@ -190,7 +187,12 @@ specializeHead ctor = \case
   p | isWild p -> Just (replicate (constructorArity ctor) wildcardPat)
   PLit _ (LBool b) ->
     case ctor of
-      ConBool b' | b == b' -> Just []
+      ConBool b' -> if b == b' then Just [] else Nothing
+      ConLit lit' -> if lit' == LBool b then Just [] else Nothing
+      _ -> Nothing
+  PLit _ lit ->
+    case ctor of
+      ConLit lit' | lit == lit' -> Just []
       _ -> Nothing
   PVariant _ label inner ->
     case ctor of
@@ -230,8 +232,9 @@ queryConstructor :: Type -> Pattern -> Maybe (Constructor, [Pattern])
 queryConstructor ty pat =
   case pat of
     PLit _ (LBool b) -> Just (ConBool b, [])
+    PLit _ lit | literalMatchesType ty lit -> Just (ConLit lit, [])
     PVariant _ label inner ->
-      case lookupVariantPayloadType ty label of
+      case lookupKnownVariantPayloadType ty label of
         Just payloadTy -> Just (ConVariant label payloadTy, [inner])
         Nothing -> Nothing
     _ -> Nothing
@@ -255,30 +258,54 @@ payloadMatrixForLabel targetLabel = mapMaybe project
         
 
 -- | Lookup payload type for a variant label on a closed variant scrutinee type.
-lookupVariantPayloadType :: Type -> Text -> Maybe Type
-lookupVariantPayloadType ty targetLabel =
-  case ty of 
-    TVariant _ row -> lookup targetLabel =<< rowFields row
+lookupKnownVariantPayloadType :: Type -> Text -> Maybe Type
+lookupKnownVariantPayloadType ty targetLabel =
+  case ty of
+    TVariant _ row -> go row
     _ -> Nothing
+  where
+    go = \case
+      TRowEmpty _ -> Nothing
+      TRowExtend _ label payloadTy rest
+        | label == targetLabel -> Just payloadTy
+        | otherwise -> go rest
+      _ -> Nothing
 
 -- | Constructor arity.
 constructorArity :: Constructor -> Int
 constructorArity = \case
   ConBool _ -> 0
   ConVariant _ _ -> 1
+  ConLit _ -> 0
 
 -- | Constructor argument types
 constructorArgTypes :: Constructor -> [Type]
 constructorArgTypes = \case
   ConBool _ -> []
   ConVariant _ payloadTy -> [payloadTy]
+  ConLit _ -> []
+
+-- | Returns True when a literal head is type-compatible with the current
+-- scrutinee head type for usefulness/specialization checks.
+--
+-- This is intentionally structural and local (head-level only):
+-- it does not enumerate literal domains and does not depend on
+-- operator capability/type-class resolution.
+literalMatchesType :: Type -> Literal -> Bool
+literalMatchesType ty lit =
+  case (ty, lit) of
+    (TBool _, LBool _) -> True
+    (TString _, LString _) -> True
+    (TInt _, LInt _) -> True
+    (TFloat _, LFloat _) -> True
+    _ -> False
 
 -- | Rebuild a witness head pattern from the constructor plus witness args.
 buildPattern :: Constructor -> [Pattern] -> Pattern
 buildPattern ctor args =
   case ctor of
-    ConBool b -> 
-      PLit dummySpan (LBool b)
+    ConLit lit         -> PLit dummySpan lit
+    ConBool b          -> PLit dummySpan (LBool b)
     ConVariant label _ ->
       case args of 
         (p:_) -> PVariant dummySpan label p

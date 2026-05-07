@@ -1,5 +1,18 @@
 # Revision history for lithic
 
+## 0.9.1.0 -- 2026-05-07
+
+* Completed Phase-7 open-universe usefulness/redundancy enforcement for case branches.
+* Extended pattern usefulness/specialization handling so literal-refined branches (for example constructor payload literals) are not misclassified as unreachable.
+* Added/updated regression coverage for open-variant redundancy and literal-refinement usefulness behavior.
+* Synced `docs/language-spec.md` with implemented semantics:
+	* open-universe redundancy now documented as enforced,
+	* literal/open-domain policy clarified as exact observed head matching + wildcard/default decomposition,
+	* explicit separation maintained between pattern usefulness semantics and future operator capability/type-class resolution.
+* Updated `docs/project-plan.md`:
+	* marked the open-universe usefulness/redundancy Phase-7 task complete,
+	* retained policy notes for infinite/open domains.
+
 ## 0.9.0.0 -- 2026-05-06
 
 * Added Phase-7 pattern-coverage scaffolding module Compiler.PatternMatch.
