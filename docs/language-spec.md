@@ -1,8 +1,8 @@
 # Lithic Language Specification (Living Core Spec)
 
 Status: Active living spec for implemented behavior.
-Version: 0.1 (2026-05-06)
-Scope baseline: Parser + current bidirectional checker through Phase 6.
+Version: 0.2 (2026-05-07)
+Scope baseline: Parser + current bidirectional checker through Phase 7.
 
 This document is the normative source for the currently implemented Lithic surface language and static semantics. Where implementation and docs disagree, this spec is the authority to reconcile against.
 
@@ -11,6 +11,9 @@ This document is the normative source for the currently implemented Lithic surfa
 ### 1.1 Purpose
 
 Lithic is still in rapid language evolution phases. A complete formal report at this stage would incur frequent churn. This living core spec defines the stable implemented core needed to prevent semantic drift while Phase 7 (pattern exhaustiveness and reachability) is under active development.
+
+Post-Phase-7 checkpoint note:
+The formalization checkpoint for pattern coverage/reachability and specification boundaries has been completed in this revision.
 
 ### 1.2 Normative Status
 
@@ -42,6 +45,20 @@ Each section is one of:
 - Stable: intended to remain source-compatible during Phase 7.
 - Provisional: implemented but likely to evolve before full formalization.
 - Reserved: syntax/semantics intentionally not implemented yet.
+
+### 1.5 Implemented vs Planned Semantics Split
+
+Normative implemented semantics (this revision):
+1. Surface syntax accepted by lexer/parser.
+2. Bidirectional static semantics through current `infer`/`check`/`subsumes` pipeline.
+3. Case-branch exhaustiveness and redundancy coverage semantics.
+4. REPL diagnostic envelope and span-locality contracts.
+
+Planned/informative semantics (non-normative in this revision):
+1. Evaluator operational semantics and value model.
+2. Surface-to-Core elaboration algorithm and proof obligations.
+3. Capability/type-class solving coherence model.
+4. Declaration-group semantics for function equations and guards.
 
 ## 2. Lexical Specification (Stable unless noted)
 
@@ -329,17 +346,17 @@ Explicitly deferred to later formalization:
 - Core language translation/elaboration judgments.
 - Macro expansion semantics and hygiene model.
 - Full constraint solver coherence proof/model.
-- Full pattern matrix formalization and proof obligations.
+- Full mechanized proof obligations for the pattern matrix algorithm.
 - Full declaration-group parsing and function-equation formal semantics.
 
-## 8. Phase-7 Formalization Plan Boundary
+## 8. Post-Phase-7 Formalization Checkpoint (Completed)
 
 During Phase 7, this living spec remains the anti-drift authority for implemented behavior.
 
-After Phase 7 completes (matrix-based exhaustiveness + reachability integrated), the project should produce a fuller formal spec that adds:
-1. Formal pattern matrix definitions and coverage/redundancy judgments.
-2. A stricter distinction between Surface and Core syntax with explicit elaboration relation.
-3. A more complete metatheory outline for type soundness-facing invariants.
+Checkpoint outcomes now captured in this document:
+1. Formal pattern matrix objects and coverage/redundancy judgments are normative in Section 9.
+2. A stricter Surface/Core boundary statement is provided in Section 10.
+3. A clear implemented-vs-planned semantics split is defined in Section 1.5.
 
 ## 9. Phase-7 Addendum (Maranget Matrix)
 
@@ -410,6 +427,11 @@ Semantics:
 2. `default(P)` keeps rows with wildcard-compatible heads (`PVar`, `PWildcard`) and removes that head column.
 3. Column ordering is preserved by replacing the selected head with its argument subpatterns, then appending remaining original columns.
 
+Operational judgment sketch:
+1. `specialize([], c) = []`.
+2. `specialize((h : t) : rows, c)` includes `args ++ t` when `h` matches `c` and contributes `args`; otherwise drops row.
+3. Wild heads contribute constructor-arity wildcards to `args`.
+
 ### 9.4 Exhaustiveness Judgment
 
 Judgment shape:
@@ -430,6 +452,11 @@ Witness policy:
        - Left-to-right traversal of matrix columns.
 3. Cap witness emission to a small fixed bound (for example 3) to keep diagnostics readable.
 
+Recursive missing-row sketch:
+1. `missing([], P) = Just []` iff `P` is empty, else `Nothing`.
+2. For finite universes, recurse by constructor specialization and reconstruct witness heads.
+3. For open universes, recurse through `default(P)` and prepend wildcard witness at that column.
+
 ### 9.5 Reachability / Redundancy Judgment
 
 Usefulness judgment:
@@ -444,6 +471,11 @@ Semantics:
 3. In Phase 7 target behavior, every redundant branch is reported as an error; multi-branch reporting is preferred if diagnostics accumulation remains practical.
 4. Open-universe rows participate in redundancy through default/wildcard decomposition and constructor/payload projection; finite-universe enumeration is only required where domains are statically finite.
 5. Capability/type-class resolution for operators is orthogonal to pattern usefulness: overloaded numeric operators do not change literal-pattern head matching semantics.
+
+Recursive usefulness sketch:
+1. `useful([], P, [])` iff `P` is empty.
+2. Wild query heads branch over finite constructors or recurse via `default(P)` for open universes.
+3. Constructor/literal heads recurse through `specialize(P, c)` with constructor arguments pushed into the query row.
 
 Guard policy:
 1. Pattern guards are not part of Phase 7 enforcement; this judgment applies to unguarded branch sets only.
@@ -489,3 +521,25 @@ Companion docs to update in same implementation change:
 1. `README.md` examples/behavior bullets for exhaustiveness and unreachable branches.
 2. `docs/project-plan.md` Phase 7 checklist status.
 3. `CHANGELOG.md` release entry with diagnostics behavior details.
+
+## 10. Surface-to-Core Boundary and Elaboration Relation
+
+### 10.1 Current Implemented Boundary (Normative)
+
+1. Parser output is `SurfaceExpr` only.
+2. Typechecker consumes `SurfaceExpr` directly; there is no standalone Core IR boundary in the current execution path.
+3. Pattern coverage machinery analyzes `SurfaceExpr` case branches directly.
+
+### 10.2 Planned Elaboration Relation (Informative)
+
+Future compiler architecture will introduce an explicit elaboration judgment:
+
+```text
+Gamma |- e_surface ~> e_core
+Gamma |- t_surface ~> t_core
+```
+
+Boundary commitments for that phase:
+1. Surface syntax remains parser-owned and frontend facing.
+2. Core syntax remains evaluator/backend owned and intentionally smaller.
+3. Coverage/type diagnostics must retain source-span provenance from surface nodes through elaboration.

@@ -1,5 +1,13 @@
 # Revision history for lithic
 
+## 0.9.3.0 -- 2026-05-07
+
+* Completed the post-Phase-7 formalization checkpoint in `docs/language-spec.md`.
+* Added explicit implemented-vs-planned semantics split to reduce normative ambiguity.
+* Added formalized pattern-coverage/redundancy judgment sketches for specialization, missing-witness generation, and usefulness recursion.
+* Added explicit Surface-to-Core boundary and planned elaboration-relation section.
+* Marked the formalization checkpoint complete in `docs/project-plan.md`.
+
 ## 0.9.2.0 -- 2026-05-07
 
 * Promoted the Phase-7 addendum in `docs/language-spec.md` from provisional draft status to normative status for implemented `case`-branch coverage behavior.

@@ -136,6 +136,8 @@ After Phase 7 reaches implementation stability, produce a fuller language specif
 2. Surface-to-Core elaboration relation and boundaries.
 3. Clear split between normative implemented semantics and planned semantics.
 
+Status: Completed in 0.9.3.0 documentation milestone.
+
 ### 📅 Phase 9: Rich REPL Experience & Lexical Enhancements
 * **Objective:** Continue improving the interactive environment and finalize front-end ergonomic parsing features.
 * **Tasks:**
