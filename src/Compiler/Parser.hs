@@ -132,7 +132,7 @@ parseTopLevel toks =
                       _ <- advance st
                       expect TokAssign st ex
                       rhs <- parseExpr (precVal PrecLowest) st ex
-                      let rhsAnn = Ann (mergeSpan (getSpan rhs) (getTypeSpan sigTy)) rhs sigTy
+                      let rhsAnn = Ann (mergeSpan (getTypeSpan sigTy) (getSpan rhs)) rhs sigTy
                           pat    = PVar e.span name
                           defSp  = mergeSpan t.span (getSpan rhsAnn)
                       mAfter <- peek st
@@ -197,7 +197,7 @@ tryParseEquationDecl nameTok name st ex = do
             Just endTok | endTok.cls == TokEOF ->
               pure (Just (TDecl (DeclDef declSpan declPat lamBody)))
             Just badTok ->
-              throw ex (MkParseError "Expceted EOF after declaration" badTok.span)
+              throw ex (MkParseError "Expected EOF after declaration" badTok.span)
             Nothing ->
               throw ex (MkParseError "Unexpected EOF after declaration" declSpan)
     _ -> do
