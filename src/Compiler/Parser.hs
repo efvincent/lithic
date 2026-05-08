@@ -106,6 +106,29 @@ parseTopLevel toks =
               Just t' | t'.cls == TokEOF -> pure (TDecl (DeclDef declSpan pat rhs))
               Just t' -> throw ex (MkParseError "Expected EOF after declaration" t'.span)
               Nothing -> throw ex (MkParseError "Unexpected EOF after declaration" declSpan)
+
+          Just t | TokIdent name <- t.cls -> do
+            _ <- advance st 
+            mNext <- peek st
+            case mNext of
+              Just t' | t'.cls == TokColon -> do
+                _ <- advance st
+                sigTy <- parseType st ex
+                let sigSpan = mergeSpan t.span (getTypeSpan sigTy)
+                mEnd <- peek st
+                case mEnd of
+                  Just e | e.cls == TokEOF -> pure (TDecl (DeclSig sigSpan name sigTy))
+                  Just e -> throw ex (MkParseError "Expected EOF after declaration" e.span)
+                  Nothing -> throw ex (MkParseError "Unexpected EOF after declaration" sigSpan)
+              _ -> do
+                pushBack t st
+                expr <- parseExpr (precVal PrecLowest) st ex
+                mEnd <- peek st
+                case mEnd of
+                  Just e | e.cls == TokEOF -> pure (TExpr expr)
+                  Just e -> throw ex (MkParseError "Expected EOF after expression" e.span)
+                  Nothing -> throw ex (MkParseError "Unexpected EOF after expression" (getSpan expr))
+                  
           _ -> do
             expr <- parseExpr (precVal PrecLowest) st ex
             mNext <- peek st

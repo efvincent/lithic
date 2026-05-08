@@ -26,6 +26,7 @@ instance Show Span where
 -- | Top-level declarations (Phase 9 addition)
 data Decl
   = DeclDef Span Pattern Expr
+  | DeclSig Span Text Type
   deriving (Show, Eq, Generic)
 
 -- | Top level parse result: either a declaration or an expression.

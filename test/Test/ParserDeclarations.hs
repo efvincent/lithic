@@ -25,11 +25,11 @@ parserDeclarationsUnitTests =
     , testCase "equation-style top-level declaration is currently rejected" $
         expectTopLevelFailure "id x = x"
 
-    , testCase "signature without equation is currently rejected" $
-        expectTopLevelFailure "id :: Int"
+    , testCase "signature without equation parses successfully (Phase 9B)" $
+      expectTopLevelDeclSuccess "id : Int"
 
     , testCase "signature-equation pair is currently rejected" $
-        expectTopLevelFailure "id :: Int\nid = 1"
+      expectTopLevelFailure "id : Int\nid = 1"
 
     , testCase "guarded declaration is currently rejected" $
         expectTopLevelFailure "isZero n | n == 0 => True"
