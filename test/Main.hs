@@ -5,6 +5,7 @@ import Test.Tasty (defaultMain, testGroup)
 import Test.Elaborator (elaboratorUnitTests)
 import Test.Evaluator (evaluatorUnitTests)
 import Test.Golden (discoverGoldenTests)
+import Test.ParserDeclarations (parserDeclarationsUnitTests)
 import Test.PatternCoverage (patternCoverageUnitTests)
 
 main :: IO ()
@@ -15,4 +16,5 @@ main = do
     , patternCoverageUnitTests
     , elaboratorUnitTests
     , evaluatorUnitTests
+    , parserDeclarationsUnitTests
     ]
