@@ -17,6 +17,7 @@ Keep phases highly decoupled and preserve clear subsystem boundaries.
    - Implement a maximal munch strategy.
    - Track precise source locations with `Span` on all tokens for diagnostics and future LSP-facing workflows.
    - Keep the lexer pure at the public entry point (`runLexer`).
+   - A pure layout preprocessing pass `runLayout :: [Token] -> [Token]` runs after `runLexer` and before `parseTopLevel`. It inserts virtual tokens `TokVirtSemi` and `TokVirtRBrace` to encode indentation-based clause boundaries and block closes. The expression parser (`runParser` / `parseExpr`) is stateless with respect to indentation; all layout reasoning is confined to this pass.
 
 2. Parsing (Pratt Parser) — **COMPLETED**:
    - Top-down operator precedence (Pratt) with explicit NUD/LED (null/left denotation) structure.
@@ -29,7 +30,7 @@ Keep phases highly decoupled and preserve clear subsystem boundaries.
   - Arithmetic includes prefix negation (`-x`) and infix subtraction (`x - y`).
   - Record literals and selection are supported: `{ x = 1 }`, `r.x`.
   - Native lens update syntax is supported for field paths: `r.{ x := 1 }`, `r.{ x %= f }`.
-  - Case expressions are supported: `case scrut of | pat => expr | ...`.
+  - Case expressions are supported; branches are layout-delimited (no `|` prefix): `case scrut of\n  pat => expr\n  ...`.
    - Application is right-associative at LED; parser uses pushback pattern to avoid left-recursion.
    - Pure entry point: `runParser :: [Token] -> Either ParseError Expr`.
    - Parser is frontend-agnostic; does not perform type checking, elaboration, or evaluation.
@@ -86,7 +87,12 @@ Keep phases highly decoupled and preserve clear subsystem boundaries.
 - **Lambdas:** `\x => body` or `fn x => body` (fat arrow `=>` is the delimiter, never thin arrow `->`)
 - **Type-annotated lambdas:** `\x : T => body` (inline annotation without parens, unambiguous)
 - **Let-bindings:** `let x = e1 in e2` where e1 may include annotations: `let x = e : T in e2`
-- **Case expressions:** `case expr of | pat => expr | pat2 => expr2`
+- **Case expressions:** layout-delimited branches under `of` (no `|` prefix):
+  ```
+  case expr of
+    pat  => expr
+    pat2 => expr2
+  ```
 - **Literals:** `42`, `3.14`, `"hello"`, `True`, `False`
 - **Arithmetic:** unary minus (`-x`) and infix subtraction (`x - y`)
 - **Implicit application:** Juxtaposition binds tightly (precedence 30): `f x y` parses as `(f x) y`

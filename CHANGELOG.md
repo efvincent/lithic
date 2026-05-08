@@ -1,5 +1,13 @@
 # Revision history for lithic
 
+## 0.9.6.0 -- 2026-05-08 (in progress)
+
+* Phase 9E: bounded layout preprocessing pass.
+	* Add `runLayout :: [Token] -> [Token]` pure pass between lexer and parser.
+	* Inserts `TokVirtSemi` (clause/statement separator) and `TokVirtRBrace` (block close) virtual tokens.
+	* Eliminates the `clauseLayoutCol` field and column-check hack in `peekPrecedence`.
+	* Unblocks multi-clause function equations and future `where` blocks.
+
 ## 0.9.5.0 -- 2026-05-08
 
 * Phase 9D: single-clause equation-style top-level declarations.

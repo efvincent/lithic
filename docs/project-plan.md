@@ -223,13 +223,20 @@ Status: Completed in 0.9.3.0 documentation milestone.
   * Phase 9B adds signature-only top-level parsing (`name : Type`) in `parseTopLevel` with test coverage.
   * Phase 9B.2 adds same-name signature+equation pairing (`name : Type` followed by `name = expr`) in `parseTopLevel`.
   * Phase 9D adds single-clause equation-style top-level declaration parsing (`f p1 ... pn = expr`) lowered through parser-produced lambdas.
-  * Remaining work is primarily multi-clause/guard grouping, REPL persistence, and Core/Elaborator declaration-group plumbing.
+  * Phase 9E (in progress): adds a bounded layout preprocessing pass (`runLayout`) between the lexer and the parser. Multi-clause equation grouping requires this pass to avoid ambiguity between continuation syntax and clause heads; it also directly unblocks `where` clauses and any future block-structured syntax.
+  * Remaining work after 9E: multi-clause/guard grouping (9E cont.), Core/Elaborator declaration-group plumbing (9F), REPL environment persistence (9G).
 * **Tasks:**
   * [ ] Add syntax highlighting, stronger multi-line editing ergonomics, better history/navigation behavior, and tighter evaluator-aware feedback.
   * [x] Add parser support for initial top-level `def` declaration form (`def p = expr`) and top-level parse routing.
   * [x] Extend parser support to minimal top-level binding declarations with optional type signatures (`def`, signature-only, and same-name signature+equation pairing).
   * [ ] Extend parser support to full declaration grouping semantics (`def`/`let` at module scope, multi-clause equations, and grouped signature association).
   * [x] Add parser support for single-clause equation-style declarations (`f p1 ... pn = expr`) lowered to declaration-level lambda form.
+  * [x] Decision (Phase 9E): introduce bounded layout-rule preprocessing pass before implementing multi-clause grouping. Rationale: multi-clause parsing requires distinguishing clause heads from Pratt application continuations; a column-check hack inside `peekPrecedence` was evaluated and rejected in favour of a proper `runLayout :: [Token] -> [Token]` pass that inserts virtual `TokVirtSemi` and `TokVirtRBrace` tokens. This keeps the expression parser stateless w.r.t. indentation and unblocks `where` blocks at no additional cost.
+  * [x] Decision (Phase 9E): retire `|` as explicit case-branch prefix. Branches will be layout-delimited under `of`; `TokVirtSemi` separates them. `|` is kept reserved to error clearly on old input.
+  * [ ] Implement `runLayout` preprocessing pass (Phase 9E): insert `TokVirtSemi` / `TokVirtRBrace` virtual tokens; wire between `runLexer` and `parseTopLevel`. Layout blocks triggered at: top-level input start, after `of` keyword, after `where` keyword (planned).
+  * [ ] Update `parseTopLevel` and `parseCase` to use `TokVirtSemi` as separator; remove `clauseLayoutCol` from `ParserState`; stop emitting/consuming `|` tokens for case branches.
+  * [ ] Update all golden fixtures and test inputs that use `| pat => expr` syntax.
+  * [ ] Add parser support for multi-clause function equations using virtual token separators.
   * [ ] Add parser support for local function-equation syntax with shared-name clauses.
   * [ ] Add guard syntax on function equations (Haskell-style guard lists) and lower to decision trees.
   * [ ] Add pattern-headed function equations and desugar to `case` while preserving source spans.
