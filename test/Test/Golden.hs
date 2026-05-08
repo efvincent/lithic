@@ -18,7 +18,7 @@ import Bluefin.State (evalState)
 
 import Compiler.AST (Expr)
 import Compiler.Elaborator (ElabError(..), elabExpr)
-import Compiler.Evaluator (EvalError(..), evalCore)
+import Compiler.Evaluator (evalCore)
 import Compiler.Lexer (LexError(..), runLexer)
 import Compiler.Parser (ParseError(..), runParser)
 import Compiler.TypeChecker (Env(..), TCState(..), TypeError(..), infer, zonk)
