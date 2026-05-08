@@ -37,7 +37,7 @@ precVal = \case
 
 data ParseError = MkParseError
   { msg   :: !Text
-  , span  :: !SourceSpan
+  , span  :: !Span
   } deriving (Show, Eq, Generic)
 
 data ParserState = MkParserState
@@ -63,9 +63,9 @@ advance st = do
       pure (Just t)
 
 -- | Creates a bounding box spanning from the start of the first to the end of the second.
-mergeSpan :: SourceSpan -> SourceSpan -> SourceSpan
-mergeSpan (MkSourceSpan sl sc _ _) (MkSourceSpan _ _ el ec) =
-  MkSourceSpan sl sc el ec
+mergeSpan :: Span -> Span -> Span
+mergeSpan (MkSpan sl sc _ _) (MkSpan _ _ el ec) =
+  MkSpan sl sc el ec
 
 -- | Single source of truth for Pratt binding power by token class.
 -- Keep implicit application routing centralized here to avoid drift.
@@ -119,10 +119,10 @@ parseTopLevel toks =
 -- indicated by a pipe.
 --
 -- For example, parses: {x = 1, y = 2 | rest}
--- and correctly merges `SourceSpan` boundaries as it builds the AST.
+-- and correctly merges `Span` boundaries as it builds the AST.
 parseRecordFields
   :: forall st ex es. (st :> es, ex :> es)
-  => SourceSpan -> State ParserState st -> Exception ParseError ex -> Eff es Expr
+  => Span -> State ParserState st -> Exception ParseError ex -> Eff es Expr
 parseRecordFields startSpan st ex = do
   label <- expectIdent st ex
   expect TokAssign st ex
@@ -187,7 +187,7 @@ consumeTypeVars st ex = loop []
 -- | Parses the interior of a structural row type: { x:Int, y:Bool | rest }
 parseRowType
   :: forall st ex es. (st :> es, ex :> es)
-  => SourceSpan -> State ParserState st -> Exception ParseError ex ->Eff es Type
+  => Span -> State ParserState st -> Exception ParseError ex ->Eff es Type
 parseRowType startSpan st ex = do
   next <- peek st
   case next of
@@ -265,7 +265,7 @@ parseTypeAtom st ex = do
       _ -> throw ex (MkParseError "Expected type" tok.span)
     
     Nothing ->
-      throw ex (MkParseError "Unexpected EOF" (MkSourceSpan 0 0 0 0))
+      throw ex (MkParseError "Unexpected EOF" (MkSpan 0 0 0 0))
 
 -- | Parses a Type Signature (handles right-associative arrows)
 parseType
@@ -306,7 +306,7 @@ parsePattern st ex = do
 
         -- TODO: Add TokLBrace here later to support `\{x, y} => ...` record pattern
       _ -> throw ex (MkParseError "Expected a pattern (variable, wildcard, literal, or variant)" tok.span)
-    Nothing -> throw ex (MkParseError "Unexpected EOF while parsing pattern" (MkSourceSpan 0 0 0 0))
+    Nothing -> throw ex (MkParseError "Unexpected EOF while parsing pattern" (MkSpan 0 0 0 0))
 
 -- | The core Pratt parsing loop.
 parseExpr 
@@ -315,7 +315,7 @@ parseExpr
 parseExpr rbp st ex = do
   mTok <- advance st
   left <- case mTok of
-    Nothing -> throw ex (MkParseError "Unexpected EOF" (MkSourceSpan 0 0 0 0))
+    Nothing -> throw ex (MkParseError "Unexpected EOF" (MkSpan 0 0 0 0))
     Just tok -> parseNud tok st ex
 
   loop rbp left
@@ -341,7 +341,7 @@ expect cls st ex = do
   case mTok of
     Just tok | tok.cls == cls -> pure ()
              | otherwise      -> throw ex (MkParseError ("Expected " <> T.pack (show cls)) tok.span)
-    Nothing -> throw ex (MkParseError "Unexpected EOF" (MkSourceSpan 0 0 0 0))
+    Nothing -> throw ex (MkParseError "Unexpected EOF" (MkSpan 0 0 0 0))
 
 -- | Consumes an identifier token and extracts its text.
 expectIdent
@@ -353,7 +353,7 @@ expectIdent st ex = do
     Just tok -> case tok.cls of
       TokIdent x -> pure x
       _          -> throw ex (MkParseError "Expected identifier" tok.span)
-    Nothing -> throw ex (MkParseError "Unexpected EOF" (MkSourceSpan 0 0 0 0))
+    Nothing -> throw ex (MkParseError "Unexpected EOF" (MkSpan 0 0 0 0))
 
 -- | Parses tokens that do not depend on a left-hand context (Prefix / Variables)
 parseNud

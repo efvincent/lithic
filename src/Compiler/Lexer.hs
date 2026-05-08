@@ -9,7 +9,7 @@ import Lens.Micro ((.~))
 import qualified Data.Text as T
 import GHC.Generics (Generic)
 import Data.Generics.Labels ()
-import Compiler.AST (SourceSpan(..))
+import Compiler.AST (Span(..))
 import Bluefin.Eff ((:>), Eff, runPureEff)
 import Bluefin.State (State, get, runState, put)
 import Bluefin.Exception (Exception, throw, try)
@@ -51,7 +51,7 @@ data TokenClass
 -- | A complete token, pairing its syntactic class with its exact source location
 data Token = MkToken
   { cls :: !TokenClass 
-  , span :: !SourceSpan
+  , span :: !Span
   } deriving (Show, Eq, Generic)
 
 -- | A custom error type for lexical failures
@@ -97,7 +97,7 @@ scanTokens st ex = loop []
       if T.null startSt.txt
       then do
         -- Append EOF token using the final position
-        let eofSpan = MkSourceSpan startSt.line startSt.col startSt.line startSt.col
+        let eofSpan = MkSpan startSt.line startSt.col startSt.line startSt.col
         pure $ reverse (MkToken TokEOF eofSpan : acc)
       else do
         mc <- advance st
@@ -215,7 +215,7 @@ scanTokens st ex = loop []
       endSt <- get st
       -- We subtract 1 from the end column because `advance` moves the cursor past the token.
       -- This gives us an inclusive end position for the span.
-      let sp = MkSourceSpan startSt.line startSt.col endSt.line (endSt.col - 1)
+      let sp = MkSpan startSt.line startSt.col endSt.line (endSt.col - 1)
       loop (MkToken cls sp : acc)
 
 -- | Looks at the next character without consuming it

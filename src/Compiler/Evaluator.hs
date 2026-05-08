@@ -13,7 +13,7 @@ import Bluefin.Eff ((:>), Eff, runPureEff)
 import Bluefin.Exception (Exception, throw, try)
 import Bluefin.Reader (Reader, ask, runReader)
 
-import Compiler.AST (Literal, SourceSpan)
+import Compiler.AST (Literal, Span)
 import Compiler.AST.Core
 
 type Env = Map Text Value
@@ -29,12 +29,12 @@ data Value
 
 -- | Evaluator error model for initial evaluator slice.
 data EvalError
-  = EvalUnboundVar SourceSpan Text
-  | EvalNonFunctionApp SourceSpan Value
-  | EvalPatternMismatch SourceSpan CorePattern Value
-  | EvalNonExhaustiveCase SourceSpan Value
-  | EvalMissingField SourceSpan Text Value
-  | EvalNotImplemented SourceSpan Text
+  = EvalUnboundVar Span Text
+  | EvalNonFunctionApp Span Value
+  | EvalPatternMismatch Span CorePattern Value
+  | EvalNonExhaustiveCase Span Value
+  | EvalMissingField Span Text Value
+  | EvalNotImplemented Span Text
   deriving (Show, Eq, Generic)
 
 -- | Evaluate a Core expression from an empty environment
@@ -109,7 +109,7 @@ evalIn env ex expr  =
 -- | Evaluate case branches in source order using first-match semantics
 evalCaseBranches 
   :: forall r ex es. (r :> es, ex :> es)
-  => Reader Env r -> Exception EvalError ex -> SourceSpan -> Value -> [(CorePattern, CoreExpr)] -> Eff es Value
+  => Reader Env r -> Exception EvalError ex -> Span -> Value -> [(CorePattern, CoreExpr)] -> Eff es Value
 evalCaseBranches env ex caseSp scrutVal branches =
   go branches
   where
@@ -122,7 +122,7 @@ evalCaseBranches env ex caseSp scrutVal branches =
           runReader (Map.union binds rho) \envBranch ->
             evalIn envBranch ex body
 
-matchPattern :: SourceSpan -> CorePattern -> Value -> EvalRes Env
+matchPattern :: Span -> CorePattern -> Value -> EvalRes Env
 matchPattern appSpan pat value = 
   case pat of
     CPVar _ name -> Right (Map.singleton name value)
@@ -154,7 +154,7 @@ matchPattern appSpan pat value =
         _ ->
           Left (EvalPatternMismatch appSpan pat value)
 
-matchRecordField :: SourceSpan -> Env -> (Text, CorePattern) -> EvalRes Env
+matchRecordField :: Span -> Env -> (Text, CorePattern) -> EvalRes Env
 matchRecordField appSpan recordMap (label, pat) =
   case Map.lookup label recordMap of
     Nothing ->

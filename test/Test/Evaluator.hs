@@ -7,7 +7,7 @@ import Data.Map.Strict qualified as Map
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (Assertion, assertFailure, testCase)
 
-import Compiler.AST (Literal(..), SourceSpan(..))
+import Compiler.AST (Literal(..), Span(..))
 import Compiler.AST.Core
 import Compiler.Evaluator (EvalError(..), Value(..), evalCore)
 
@@ -177,5 +177,5 @@ shouldBe actual expected
   | actual == expected = pure ()
   | otherwise = assertFailure ("Expected: " <> show expected <> "\nBut got:  " <> show actual)
 
-sp :: SourceSpan
-sp = MkSourceSpan 1 1 1 1
+sp :: Span
+sp = MkSpan 1 1 1 1

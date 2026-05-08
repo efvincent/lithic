@@ -112,7 +112,7 @@ Line comments are supported with `--` through end-of-line.
 
 ### 2.5 Source Location Contract
 
-Every emitted token carries a `SourceSpan` and downstream parse/type diagnostics preserve source-location reporting.
+Every emitted token carries a `Span` and downstream parse/type diagnostics preserve source-location reporting.
 
 ## 3. Surface Grammar (Core, with Stability Labels)
 
@@ -346,7 +346,7 @@ Current REPL-visible categories:
 - Type error: `Type Error: <msg> at <span>`
 
 Contract requirements:
-1. Diagnostics carry precise `SourceSpan` whenever an originating token/node exists.
+1. Diagnostics carry precise `Span` whenever an originating token/node exists.
 2. Parser and checker should prefer targeted spans over coarse enclosing spans.
 3. Changes to diagnostic formatting visible in REPL output require README/spec sync.
 
