@@ -164,12 +164,12 @@ Notes:
 2. Record labels in row-like forms may be lowercase or uppercase at parser level.
 3. `fn` and `\\` both tokenize to `TokLam` and are accepted as lambda introducers.
 
-### 3.4 Declaration Forms (Reserved)
+### 3.4 Declaration Forms (Provisional)
 
 Current parser entrypoint status:
 1. `runParser` remains expression-oriented.
 2. `parseTopLevel` supports minimal declaration forms: `def Pattern = Expr`, `ident : Type`, same-name signature+equation pairing (`ident : Type` followed by `ident = Expr`), and single-clause equation forms (`f p1 ... pn = expr`).
-3. Declaration groups, guarded clauses, and function equations remain reserved roadmap syntax.
+3. Declaration groups, guarded clauses, and multi-clause function equations remain reserved roadmap syntax.
 4. Disambiguation rule at top level: bare `ident : Type` is interpreted as a signature declaration.
 5. In this slice, `parseTopLevel` does not provide an expression-annotation escape hatch for this shape; `ident`-headed annotation forms at top level are reserved to declaration parsing.
 
