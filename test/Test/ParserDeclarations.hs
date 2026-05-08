@@ -34,8 +34,8 @@ parserDeclarationsUnitTests =
     , testCase "top-level parenthesized annotation is currently rejected" $
       expectTopLevelFailure "(x) : Int"
 
-    , testCase "signature-equation pair is currently rejected" $
-      expectTopLevelFailure "id : Int\nid = 1"
+    , testCase "signature-equation pair parses successfully (Phase 9B.2)" $
+      expectTopLevelDeclSuccess "id : Int\nid = 1"
 
     , testCase "guarded declaration is currently rejected" $
         expectTopLevelFailure "isZero n | n == 0 => True"
