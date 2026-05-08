@@ -170,13 +170,15 @@ Current parser entrypoint status:
 1. `runParser` remains expression-oriented.
 2. `parseTopLevel` supports minimal declaration forms: `def Pattern = Expr` and `ident : Type`.
 3. Declaration groups, guarded clauses, and function equations remain reserved roadmap syntax.
+4. Disambiguation rule at top level: bare `ident : Type` is interpreted as a signature declaration.
+5. In this slice, `parseTopLevel` does not provide an expression-annotation escape hatch for this shape; `ident`-headed annotation forms at top level are reserved to declaration parsing.
 
 Status table for planned declaration forms:
 
 | Form | Target Syntax | Implementation Status | Notes |
 | --- | --- | --- | --- |
 | Minimal top-level def declaration | `def pat = expr` | Implemented (parseTopLevel only) | Requires EOF after declaration; not yet threaded through REPL evaluation environment. |
-| Minimal top-level signature declaration | `ident : Type` | Implemented (parseTopLevel only) | Signature-only declaration parses; signature + equation grouping is not implemented yet. |
+| Minimal top-level signature declaration | `ident : Type` | Implemented (parseTopLevel only) | Signature-only declaration parses; signature + equation grouping is not implemented yet. Bare `ident : Type` at top level is reserved for this declaration form. |
 | Function equation (single clause) | `f p1 ... pn = expr` | Not implemented yet | Will parse as a declaration clause, not an expression form. |
 | Function equation (multi clause) | repeated `f ... = ...` clauses | Not implemented yet | Clauses will be grouped by function name into one declaration unit. |
 | Guarded clause | `f p1 ... pn` then `| guard => expr` lines | Not implemented yet | Guard RHS uses fat arrow to remain consistent with term-level branch delimiters. |

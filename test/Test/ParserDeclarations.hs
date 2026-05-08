@@ -28,6 +28,12 @@ parserDeclarationsUnitTests =
     , testCase "signature without equation parses successfully (Phase 9B)" $
       expectTopLevelDeclSuccess "id : Int"
 
+    , testCase "top-level bare ident annotation is parsed as signature declaration" $
+      expectTopLevelDeclSuccess "x : Int"
+
+    , testCase "top-level parenthesized annotation is currently rejected" $
+      expectTopLevelFailure "(x) : Int"
+
     , testCase "signature-equation pair is currently rejected" $
       expectTopLevelFailure "id : Int\nid = 1"
 
