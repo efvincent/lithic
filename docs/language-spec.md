@@ -95,8 +95,10 @@ The lexer recognizes the following core keywords/symbols used by the implemented
 - `-` (prefix unary minus and infix subtraction)
 
 Reserved (not currently implemented):
-- Function-equation clause heads (for example, `name pat1 pat2 = expr`).
+- Multi-clause function equations (for example, repeated `name pat = expr` clauses for the same name).
 - Guarded declaration bars (for example, `| guard => expr`).
+
+Note: single-clause equation-style declarations (`name p1 ... pn = expr`) are implemented in `parseTopLevel` as of Phase 9D.
 
 ### 2.3 Literals
 
@@ -164,12 +166,12 @@ Notes:
 2. Record labels in row-like forms may be lowercase or uppercase at parser level.
 3. `fn` and `\\` both tokenize to `TokLam` and are accepted as lambda introducers.
 
-### 3.4 Declaration Forms (Reserved)
+### 3.4 Declaration Forms (Provisional)
 
 Current parser entrypoint status:
 1. `runParser` remains expression-oriented.
-2. `parseTopLevel` supports minimal declaration forms: `def Pattern = Expr`, `ident : Type`, and same-name signature+equation pairing (`ident : Type` followed by `ident = Expr`).
-3. Declaration groups, guarded clauses, and function equations remain reserved roadmap syntax.
+2. `parseTopLevel` supports minimal declaration forms: `def Pattern = Expr`, `ident : Type`, same-name signature+equation pairing (`ident : Type` followed by `ident = Expr`), and single-clause equation forms (`f p1 ... pn = expr`).
+3. Declaration groups, guarded clauses, and multi-clause function equations remain reserved roadmap syntax.
 4. Disambiguation rule at top level: bare `ident : Type` is interpreted as a signature declaration.
 5. In this slice, `parseTopLevel` does not provide an expression-annotation escape hatch for this shape; `ident`-headed annotation forms at top level are reserved to declaration parsing.
 
@@ -180,7 +182,7 @@ Status table for planned declaration forms:
 | Minimal top-level def declaration | `def pat = expr` | Implemented (parseTopLevel only) | Requires EOF after declaration; not yet threaded through REPL evaluation environment. |
 | Minimal top-level signature declaration | `ident : Type` | Implemented (parseTopLevel only) | Signature-only declaration parses. Bare `ident : Type` at top level is reserved for this declaration form. |
 | Same-name signature+equation pair | `ident : Type` then `ident = expr` | Implemented (parseTopLevel only) | Lowered in parser to a definition with an annotated RHS; full declaration grouping remains unimplemented. |
-| Function equation (single clause) | `f p1 ... pn = expr` | Not implemented yet | Will parse as a declaration clause, not an expression form. |
+| Function equation (single clause) | `f p1 ... pn = expr` | Implemented (parseTopLevel only) | Lowered by parser to a declaration whose RHS is nested lambdas over equation patterns. |
 | Function equation (multi clause) | repeated `f ... = ...` clauses | Not implemented yet | Clauses will be grouped by function name into one declaration unit. |
 | Guarded clause | `f p1 ... pn` then `| guard => expr` lines | Not implemented yet | Guard RHS uses fat arrow to remain consistent with term-level branch delimiters. |
 | Pattern-headed clause | `f <pattern> ... = expr` | Not implemented yet | Will lower through the same match-analysis pipeline as `case`. |
@@ -531,7 +533,7 @@ Expected output contract for failures:
 Modules and touch points:
 1. New module: `src/Compiler/PatternMatch.hs`.
 2. Typechecker integration: `infer` path for `Case` in `src/Compiler/TypeChecker.hs`.
-3. Pipeline visibility: golden harness in `test/Main.hs` through existing REPL/type error formatting path.
+3. Pipeline visibility: golden harness in `test/Test/Golden.hs` via `parseTopLevel`. Declaration inputs render as `[Decl] <show decl>`; expression inputs continue through the existing type/core/eval formatting path.
 
 Companion docs to update in same implementation change:
 1. `README.md` examples/behavior bullets for exhaustiveness and unreachable branches.

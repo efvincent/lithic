@@ -16,11 +16,11 @@ import Bluefin.Exception (try)
 import Bluefin.Reader (runReader)
 import Bluefin.State (evalState)
 
-import Compiler.AST (Expr)
+import Compiler.AST (Expr, TopLevel(..))
 import Compiler.Elaborator (ElabError(..), elabExpr)
 import Compiler.Evaluator (evalCore)
 import Compiler.Lexer (LexError(..), runLexer)
-import Compiler.Parser (ParseError(..), runParser)
+import Compiler.Parser (ParseError(..), parseTopLevel)
 import Compiler.TypeChecker (Env(..), TCState(..), TypeError(..), infer, zonk)
 
 -- | Discover all golden tests under test/fixtures and pair them with the
@@ -41,10 +41,17 @@ runCompilerPipeline path = do
   source <- TIO.readFile path
   let resultText = case runLexer source of
         Left lexErr -> "Lex Error: " <> lexErr.msg
-        Right toks -> case runParser toks of
+        Right toks -> case parseTopLevel toks of
           Left parseErr -> "Parse Error: " <> parseErr.msg
-          Right ast -> renderTypedPipeline ast
+          Right topLevel -> renderTopLevelPipeline topLevel
   pure $ BSL.pack (T.unpack resultText <> "\n")
+
+-- | Render top-level parse result in golden snapshots.
+-- Declarations currently stop at parse output by design.
+renderTopLevelPipeline :: TopLevel -> T.Text
+renderTopLevelPipeline = \case
+  TDecl decl -> "[Decl] " <> T.pack (show decl)
+  TExpr ast  -> renderTypedPipeline ast
 
 -- | Render the golden snapshot for a successfully parsed surface term.
 -- This preserves the existing AST/type view and appends the current
