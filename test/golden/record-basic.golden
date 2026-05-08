@@ -1,2 +1,4 @@
 [AST] Let [1,1]..[2,10] (PVar [1,5]..[1,5] "r") (RecExtend [1,9]..[1,44] "x" (Lit [1,15]..[1,15] (LInt 1)) (RecExtend [1,9]..[1,44] "nested" (RecExtend [1,27]..[1,42] "y" (Lit [1,33]..[1,33] (LInt 2)) (RecExtend [1,27]..[1,42] "z" (Lit [1,40]..[1,40] (LInt 3)) (RecEmpty [1,42]..[1,42]))) (RecEmpty [1,44]..[1,44]))) (RecSelect [2,1]..[2,10] (RecSelect [2,1]..[2,8] (Var [2,1]..[2,1] "r") "nested") "z")
 [Type] TInt [1,40]..[1,40]
+[Core] CLet [1,1]..[2,10] (CPVar [1,5]..[1,5] "r") (CRecord [1,9]..[1,44] [("x",CLit [1,15]..[1,15] (LInt 1)),("nested",CRecord [1,27]..[1,42] [("y",CLit [1,33]..[1,33] (LInt 2)),("z",CLit [1,40]..[1,40] (LInt 3))])]) (CSelect [2,1]..[2,10] (CSelect [2,1]..[2,8] (CVar [2,1]..[2,1] "r") "nested") "z")
+[Val] VLit (LInt 3)

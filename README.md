@@ -31,7 +31,7 @@ In the REPL:
 - Primitive literals currently include `Int`, `Float`, `String`, and `Bool` (`True`/`False`).
 - Prefix unary minus and infix subtraction are supported (`-x`, `x - y`).
 - Function-equation syntax with guards and pattern-headed clauses is planned but not yet implemented.
-- Phase-7 interim behavior: case exhaustiveness is enforced for finite and open universes; unreachable-branch errors are currently enforced for finite universes only.
+- Phase-7 behavior: case exhaustiveness and unreachable-branch checks are enforced for both finite constructor universes and the current open-universe cases supported by the pattern analysis.
 - Successful input is rendered as two lines: `[AST] <show ast>` followed by `[Type] <show type>`.
 - Lexing, parsing, and type errors are shown inline in the same pane.
 - Press Enter to submit the current editor contents.

@@ -4,7 +4,7 @@
 **Lithic** is an experimental, high-performance, purely functional programming language. 
 * **Target:** Compiles directly to standard C without a garbage collector or heavy runtime, featuring bidirectional C FFI.
 * **Paradigms:** Pure functional, but capable of C-level performance via Functional But In-Place (FBIP) mutations and linear types.
-* **Evaluation:** To be determined via experimentation (evaluating strict vs. lazy, and small-step vs. big-step semantics).
+* **Evaluation:** Strict, small-step semantics are the baseline evaluator direction.
 * **Type System:** Advanced structural typing featuring Rank-2 Polymorphism, Row Polymorphism, Existential Types, and Bidirectional Typechecking.
 * **Developer Experience:** A rich interactive REPL, an integrated LSP server, and native debugging capabilities.
 
@@ -19,13 +19,13 @@ Primary instructional pillars include:
 3. Pattern coverage analysis (exhaustiveness and redundancy/usefulness).
 4. Completeness boundaries and where formal guarantees do or do not currently hold.
 5. Practical effect management in Haskell using Bluefin.
-6. Operational semantics choices (small-step vs big-step, strict vs lazy) and evaluator construction.
+6. Operational semantics choices (small-step vs big-step) and strict evaluator construction.
 7. Backend engineering techniques (C code generation and potential LLVM pathways).
 
 ## 2. Core Architectural Decisions
 These decisions are locked in and should guide all future implementation phases:
 * **Compiler Implementation:** Haskell (targeting GHC 9.14.1+ for LTS stability and zero-cost abstraction optimization).
-* **Effect Tracking:** The `Bluefin` effect system. We strictly avoid monad transformer stacks (MTL) in favor of explicit, localized effect handles (e.g., `Reader Env`, `State TCState`, `Exception TypeError`).
+* **Effect Tracking:** The `Bluefin` effect system. We strictly avoid monad transformer stacks (MTL) in favor of explicit, localized effect handles (e.g., `Reader Env`, `State TCState`, `Exception TypeError`). The same Bluefin-style lexical capability model is the basis for Lithic's user-facing effect system: effects in user programs are tracked via row polymorphism (e.g., `{ io } String`) and compiled to C dictionary pointers, not monadic wrappers.
 * **Lenses:** `microlens` and `generic-lens` for lightweight, boilerplate-free state updates.
 * **Parsing:** A hand-rolled lexer capturing precise `SourceSpan` data, feeding into a Pratt Parser (Top-Down Operator Precedence) for elegant, extensible precedence handling.
 * **Typechecker Architecture:** A **Bidirectional** engine splitting AST traversal into `check` (top-down expected types) and `infer` (bottom-up type synthesis). 
@@ -168,7 +168,37 @@ Use this checklist in PR descriptions whenever lexer/parser/typechecker behavior
 
 ### 📅 Phase 8: Evaluation Semantics (Interpreter)
 * **Objective:** Build an internal evaluator to actually execute Lithic code.
-* **Tasks:** Experiment with and implement either strict or lazy semantics, evaluating the trade-offs of a small-step vs. big-step evaluator.
+* **Decision record (locked):**
+  * [x] Baseline evaluation strategy: strict.
+  * [x] Baseline formal/operational strategy: small-step.
+  * [x] Normative semantics remain small-step regardless of implementation strategy.
+  * [x] Preferred implementation model: CEK-style machine when schedule allows.
+  * [x] Primary rationale: educational depth and formal rigor over delivery speed.
+* **Tasks:**
+  * [x] Specify small-step transition judgments for the initial evaluator core.
+    - Initial formal artifact: `docs/evaluator-small-step.md`.
+  * [x] Specify a minimal Core AST for Phase-8-evaluable terms (documentation first).
+    - Scope: literals, lambda/app, let, case, variants, structural records, selection.
+    - Excludes: full macro system, declaration groups, and non-essential syntactic sugar.
+    - Module boundary decision: keep surface AST in `Compiler.AST`; place Core in `Compiler.AST.Core`.
+  * [x] Specify the initial Surface-to-Core desugaring/elaboration boundary.
+    - Include ordering constraints for future macro expansion: parse -> expand -> desugar/elaborate -> evaluate.
+  * [x] Implement the minimal Core AST in the compiler.
+    - Checkpoint A: add `Compiler.AST.Core` module with Phase 8 constructors only.
+  * [x] Implement the initial Surface-to-Core desugaring/elaboration pass for the Phase 8 subset.
+    - Checkpoint B: add `Compiler.Elaborator` skeleton.
+    - Checkpoint C: elaborate var/lit/lam/app/let/case/variant/record/select + annotation erasure.
+    - Checkpoint D: keep `RecUpdate` as explicit out-of-scope elaboration error for initial pass.
+  * [x] Wire elaboration into the golden test pipeline.
+    - Goal: make the snapshot harness exercise Surface -> Core lowering before evaluator work begins.
+  * [x] Implement strict evaluator baseline over Core terms.
+    - Preferred: CEK-style small-step machine.
+    - Interim implementation: big-step closure evaluator over Core (strict), with normative small-step spec retained in docs.
+  * [x] Document the value model and reduction contexts used by the evaluator.
+    - Captured in `docs/evaluator-small-step.md`.
+  * [x] Validate evaluator behavior with focused fixtures/golden outputs.
+    - Golden pipeline now renders `[Core]` and `[Val]` outputs, and evaluator unit coverage includes var/lit/lam/app/let/case/variant/record/select behaviors.
+  * ~~Add a follow-up note on optional future lazy experimentation~~ — **Removed:** Lithic is strictly evaluated; lazy evaluation is not a planned direction.
 
 ### Formalization Checkpoint (Post-Phase 7)
 After Phase 7 reaches implementation stability, produce a fuller language specification pass that expands beyond the current living core spec:
@@ -178,18 +208,65 @@ After Phase 7 reaches implementation stability, produce a fuller language specif
 
 Status: Completed in 0.9.3.0 documentation milestone.
 
-### 📅 Phase 9: Rich REPL Experience & Lexical Enhancements
-* **Objective:** Continue improving the interactive environment and finalize front-end ergonomic parsing features.
+### 📅 Phase 9: Top-Level Bindings & Rich REPL Experience
+* **Objective:** Introduce top-level declaration forms, continue improving the interactive environment, and finalize front-end ergonomic parsing features.
+* **Top-level binding design notes:**
+  * The current surface syntax only supports expressions — all binding is local via `let`. Top-level forms are required before Lithic programs become composable beyond a single expression.
+  * Top-level bindings are declaration-level: `def f x = body` or `let f = \x => body` at module scope, distinct from expression-level `let`.
+  * Elaboration must handle declaration groups: mutually recursive definitions within a group, ordering constraints, and separate Core lowering for declaration forms vs. expression forms.
+  * Top-level bindings must thread through the evaluator and REPL: the REPL should accumulate a top-level environment across inputs rather than resetting per expression.
+  * Type signatures at declaration scope (e.g., `f :: a -> a`) are a parallel addition; initial implementation may defer to inferred types.
 * **Tasks:**
   * [ ] Add syntax highlighting, stronger multi-line editing ergonomics, better history/navigation behavior, and tighter evaluator-aware feedback.
-  * [ ] Add parser support for top-level and local function-equation syntax with shared-name clauses.
+  * [ ] Add parser support for top-level binding declarations (`def`/`let` at module scope) with optional type signature annotations.
+  * [ ] Add parser support for local function-equation syntax with shared-name clauses.
   * [ ] Add guard syntax on function equations (Haskell-style guard lists) and lower to decision trees.
   * [ ] Add pattern-headed function equations and desugar to `case` while preserving source spans.
+  * [ ] Extend the REPL evaluator loop to maintain a persistent top-level environment across submissions.
+  * [ ] Extend Core AST and Elaborator to represent top-level declaration groups.
   * [ ] **Future Lexical/Parsing Enhancements:**
     * [ ] Support floats without an integer part (e.g., `.14159`).
     * [ ] Support scientific notation (e.g., `1e-5`).
     * [ ] Support multi-line strings.
     * [ ] Support Character literals (e.g., `'a'`).
+
+### 📅 Phase 9.5: List / Sequence Type & `::` Cons Syntax
+* **Objective:** Introduce a built-in list/sequence type with `::` as the cons operator at both expression and pattern level.
+* **Design notes:**
+  * Lithic uses `:` for type annotations (e.g., `expr : Type`), so `:` is not available for cons. `::` is chosen as the surface cons operator, analogous to Haskell's `:`, to avoid ambiguity.
+  * `::` is a right-associative infix operator at the expression level: `1 :: 2 :: []`.
+  * At the pattern level, `x :: xs` destructs head and tail; `[]` matches the empty list.
+  * Exhaustiveness analysis must account for the `::` / `[]` constructor pair as a two-constructor closed universe (no open variant row behavior).
+  * The list type may initially be built in as `List a` with special parser support rather than derived from general data declarations.
+  * `[a, b, c]` list literal syntax should desugar to `a :: b :: c :: []` during elaboration.
+  * Long-term: when a general algebraic data declaration form is available (Phase 10+), the list type can be defined in a standard library file rather than hard-coded in the compiler.
+* **Tasks:**
+  * [ ] Add `::` as a right-associative infix cons operator in the lexer and parser.
+  * [ ] Add `[]` as the empty list literal.
+  * [ ] Add `[a, b, c]` list literal sugar and desugar to `::` chains in the elaborator.
+  * [ ] Add `List a` type constructor and `TList` AST node (or equivalent row encoding).
+  * [ ] Extend `checkPattern` and pattern matrix to handle `::` / `[]` as a closed two-constructor universe.
+  * [ ] Extend the evaluator with `VList` or a cons-cell value representation.
+  * [ ] Add golden fixtures covering list construction, deconstruction, and exhaustiveness errors.
+
+### 📅 Phase 9.6: Tuples & Tuple Sections
+* **Objective:** Introduce tuple syntax as first-class surface sugar over the existing row polymorphism infrastructure, gaining n-ary flat product types without Haskell-style per-arity boilerplate.
+* **Design notes:**
+  * **Representation:** Tuples are anonymous records with integer positional labels (`0`, `1`, `2`, …). `(Int, String)` is syntactic sugar for `{ 0 : Int, 1 : String }` at the type level, and `(e1, e2)` desugars to `{ 0 = e1, 1 = e2 }` at the term level. The existing row unification engine handles them with zero new machinery.
+  * The comma inside `( … )` is a purely structural lexical separator — it has no independent operator meaning and does not conflict with any other use of comma in the grammar.
+  * **Unit:** `()` is the zero-tuple, sugar for the empty record `{}`. `TUnit` is an alias for the empty row type. The empty record already exists in the type system; `()` adds only a surface spelling.
+  * **Pattern matching:** `(x, y)` in a pattern position desugars to `{ 0 = x, 1 = y }` — handled entirely by the existing record pattern machinery.
+  * **Exhaustiveness:** Tuples are single-constructor (they are records); the existing record exhaustiveness path applies unchanged.
+  * **Tuple sections:** `(, e)` is sugar for a record extension expression with a hole at position `0`: effectively `\x => { 0 = x, 1 = e }`. Holes are filled left-to-right by freshly introduced lambda parameters. This is record-update/extension sugar, not a separate lambda-introduction rule. Multiple holes introduce one parameter each, still left-to-right.
+  * **Performance:** Because tuples lower to row-typed anonymous records, the C backend can lay them out as flat structs by offset rather than heap-allocated dictionaries — identical to the nominal record FBIP path. No per-arity primitive type or hardcoded typeclass instances are required.
+  * **No new Core nodes needed:** `CTuple` / `VTuple` are not required. Surface tuple syntax elaborates entirely to existing `CRecord` / `VRecord` with integer keys.
+* **Tasks:**
+  * [ ] Add `()` / `(e1, e2, …)` expression syntax to the lexer/parser, desugaring to record literals with integer field labels.
+  * [ ] Add `(T1, T2, …)` type syntax, desugaring to row types with integer field labels. Add `TUnit` as an alias for the empty row type.
+  * [ ] Add `(p1, p2, …)` pattern syntax, desugaring to record patterns with integer field labels.
+  * [ ] Add tuple section parsing: holes (`,` without an expression) in a tuple literal introduce lambda parameters. Desugar in the elaborator to record-extension lambdas.
+  * [ ] Confirm row unifier and pattern exhaustiveness checker handle integer-labelled rows correctly (no new logic expected, but add regression fixtures).
+  * [ ] Add golden fixtures for tuple construction, deconstruction, unit, and tuple sections.
 
 ### 📅 Phase 10: Existentials & GADTs
 * **Objective:** Introduce Existential quantification (`exists a.`) and Generalized ADT semantics, expanding Lithic into rich data encapsulation.
@@ -242,7 +319,35 @@ Design constraints for implementation:
 * **Objective:** Lower the fully zonked, typed AST into standard C, proving the zero-runtime concept.
 * **Tasks:** Implement a bidirectional Foreign Function Interface (FFI) to call C libraries directly from Lithic.
 
-### 📅 Phase 15: Tooling Ecosystem (LSP & Debugger)
-* **Objective:** Elevate Lithic to a production-ready language.
-* **Tasks:** Build a Language Server Protocol (LSP) implementation for VSCode (leveraging our `SourceSpan` tracking) and introduce debugging hooks.
+### 📅 Phase 15: IO Effect Capability Layer
+* **Objective:** Surface Lithic's Bluefin-style capability-passing effect model to user programs so effectful IO is expressible without a monadic wrapper.
+* **Design notes:**
+  * Lithic does not use an `IO` monad. Instead, effects are tracked via row polymorphism in the type system: `read :: { io } String` means `read` requires the `io` capability in scope.
+  * Capability handles are passed explicitly at call sites or threaded implicitly through row-polymorphic function signatures; the compiler lowers them to standard C dictionary pointers.
+  * The REPL and top-level `main` entry point are implicitly given the full capability set; programmer-defined functions must declare their required capabilities explicitly.
+  * Standard capabilities planned for initial slice: `io` (console read/write), `file` (filesystem), `net` (network sockets), `rand` (random number generation).
+  * Pure functions (no capability row requirements) compile identically to today's pure Core expressions.
+  * This is architecturally compatible with Phase 13 (linear types): a capability handle could carry linearity to prevent aliasing of stateful resources.
+* **Tasks:**
+  * [ ] Define capability row kind and integrate it with the existing row polymorphism infrastructure.
+  * [ ] Add `{ cap1, cap2 } ReturnType` surface syntax for capability-annotated function types.
+  * [ ] Implement capability checking in the bidirectional typechecker (capability rows unify like record rows).
+  * [ ] Add primitive IO capability operations (`print`, `readLine`, etc.) as built-in declarations with `io` capability requirements.
+  * [ ] Thread the REPL's top-level capability environment through the evaluator.
+  * [ ] Add golden fixtures for capability-annotated function types and simple IO programs.
+
+### 📅 Phase 16: Tooling Ecosystem (LSP & Debugger)
+* **Objective:** Elevate Lithic to a production-ready language with a first-class VSCode developer experience.
+* **Tasks:**
+  * [ ] Build a Language Server Protocol (LSP) server implementation, leveraging the `SourceSpan` tracking carried through all compiler phases for precise hover/go-to-definition/diagnostics.
+  * [ ] Implement the LSP `textDocument/diagnostic` push model so type errors appear inline in VSCode without requiring a manual build step.
+  * [ ] Implement hover (`textDocument/hover`) to surface inferred types and kind information at the cursor position.
+  * [ ] Implement go-to-definition and find-references for top-level and local bindings.
+  * [ ] Implement semantic syntax highlighting via LSP `textDocument/semanticTokens`.
+  * [ ] Introduce debugger adapter protocol (DAP) support to enable VSCode breakpoint, step, and watch variable features:
+    * The evaluator must carry a structured execution trace (small-step transition log) that the DAP adapter can expose as step events.
+    * Breakpoints map to `SourceSpan`-tagged Core nodes; the evaluator checks the active breakpoint set before each reduction step.
+    * Watch variables are resolved against the current `Env` (evaluator environment) at each pause point, formatted using the same pretty-printer used by the REPL.
+    * Step-in, step-over, and step-out correspond to single-step, skip-subterm, and return-to-parent strategies in the small-step machine.
+  * [ ] Ensure the DAP and LSP servers are structurally isolated from compiler stages (no Brick/TUI imports in the server layer).
 *(Note for LLM: The workspace is fully loaded upon initialization. Do not ask the user to provide specific files like `AST.hs` or `TypeChecker.hs`, as they are already available in the uploaded context.)*
