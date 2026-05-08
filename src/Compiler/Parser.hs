@@ -1,4 +1,3 @@
-{-# OPTIONS_GHC -Wno-unused-do-bind #-}
 module Compiler.Parser where
 
 import Data.Text (Text)
@@ -85,6 +84,38 @@ peekPrecedence st = do
     Nothing -> precVal PrecLowest
     Just tok -> tokenPrecedence tok.cls
 
+-- | Parse top-level input: either a declaration or an expression.
+-- Parses `def p = e` as a declaration; otherwise parses a plain expression.
+-- In both cases, input must end at EOF.
+parseTopLevel :: [Token] -> Either ParseError TopLevel
+parseTopLevel toks =
+  runPureEff $
+    fmap fst $
+      runState (MkParserState toks) \st ->
+      try \ex -> do
+        eTok <- peek st
+        case eTok of
+          Just t | t.cls == TokDef -> do
+            _ <- advance st
+            pat <- parsePattern st ex
+            expect TokAssign st ex
+            rhs <-  parseExpr (precVal PrecLowest) st ex
+            let declSpan = mergeSpan t.span (getSpan rhs)
+            mNext <- peek st
+            case mNext of
+              Just t' | t'.cls == TokEOF ->
+                pure (TDecl (DeclDef declSpan pat rhs))
+              Just t' ->
+                throw ex (MkParseError "Expected EOF after declaration" t'.span)
+              Nothing ->
+                throw ex (MkParseError "Unexpected EOF after declaration" declSpan)
+          _ -> do
+            expr <- parseExpr (precVal PrecLowest) st ex
+            mNext <- peek st
+            case mNext of
+              Just t' | t'.cls == TokEOF -> pure (TExpr expr)
+              Just t' -> throw ex (MkParseError "Expected EOF after expression" t'.span)
+              Nothing -> pure (TExpr expr)
 -- | Recursively parses the interior fields of a record definition
 -- Handles standard fields separated by commas, and row extensions 
 -- indicated by a pipe.

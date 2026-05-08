@@ -438,42 +438,42 @@ big-step interpreter, with correspondence obligations stated below.
 
 | Formal concept              | Haskell representation                                      |
 |-----------------------------|-------------------------------------------------------------|
-| `e`                         | `Expr` (current Phase 8 baseline)                           |
-| `v`                         | `Val` ADT (new, in `Compiler.Evaluator`)                    |
-| `rho : Var ⇀ Val`           | `type Env = Map Var Val`                                    |
-| `theta` (binding map)       | `Map Var Val` returned by `patMatch`                        |
+| `e`                         | `CoreExpr` (in `Compiler.AST.Core`)                         |
+| `v`                         | `Value` ADT (in `Compiler.Evaluator`)                       |
+| `rho : Var ⇀ v`             | `type Env = Map Text Value`                                 |
+| `theta` (binding map)       | `Map Text Value` returned by `matchPattern`                 |
 | `e[theta]` (substitution)   | Environment extension at binder entry                        |
 | `E[.]` (evaluation context) | Explicit machine context (CEK-style) or derived evaluation order in a big-step interpreter |
-| `RuntimeError(...)`         | `Left EvalError` in `Either EvalError Val`                  |
-| `selectBranch`              | Linear scan over `[(Pat, Expr)]` using `patMatch`           |
+| `RuntimeError(...)`         | `Left EvalError` in `Either EvalError Value`                |
+| `selectBranch`              | Linear scan over `[(CorePattern, CoreExpr)]` using `matchPattern` |
 
 Architecture note (Surface/Core boundary):
-1. Current Phase 8 baseline may evaluate the current `Expr` directly for
-   incremental delivery.
-2. Long-term architecture still requires elaboration from Surface to Core.
-3. When `CoreExpr` exists, evaluator rules should be restated over `CoreExpr`
-   and this section should be updated accordingly.
+1. Phase 8 evaluator execution is over Core (`CoreExpr`) after elaboration.
+2. Surface AST remains frontend syntax; evaluation semantics are defined on Core.
+3. Any new surface construct must elaborate into existing/new Core forms before evaluation.
 
 ### 12.2 Proposed Module and Key Types
 
 Target module: `src/Compiler/Evaluator.hs`
 
 ```haskell
-data Val
+data Value
   = VLit    Literal
-  | VClosure Env Pat Expr        -- lambda value; captures environment at creation
-  | VVariant Label Val
-  | VRecord  [(Label, Val)]
+   | VClosure Env CorePattern CoreExpr   -- lambda value; captures environment at creation
+   | VVariant Text Value
+   | VRecord  [(Text, Value)]
 
-type Env = Map Var Val
+type Env = Map Text Value
 
 data EvalError
-  = MatchError     Pat Val       -- irrefutable pattern mismatch
-  | NonExhaustive  Val           -- case scrutinee matched no branch
-  | MissingField   Label         -- record field not present (post-typecheck: unreachable)
-  | UnboundVar     Var           -- free variable with no env binding (post-typecheck: unreachable)
+   = EvalUnboundVar SourceSpan Text
+   | EvalNonFunctionApp SourceSpan Value
+   | EvalPatternMismatch SourceSpan CorePattern Value
+   | EvalNonExhaustiveCase SourceSpan Value
+   | EvalMissingField SourceSpan Text Value
+   | EvalNotImplemented SourceSpan Text
 
-eval :: Env -> Expr -> Either EvalError Val
+evalCore :: CoreExpr -> Either EvalError Value
 ```
 
 If the implementation uses closures/environments rather than literal
@@ -495,8 +495,8 @@ Once the evaluator is wired to the REPL pipeline (parse → check → eval):
 - Successful evaluation: `[Val] <show value>`
 - Evaluation error: `Eval Error: <description>`
 
-The existing `parse → check` pipeline is preserved; evaluation is a new
-final stage that consumes a well-typed `Expr` and produces a `Val` or `EvalError`.
+The existing `parse → check → elaborate` pipeline is preserved; evaluation is a new
+final stage that consumes a well-typed `CoreExpr` and produces a `Value` or `EvalError`.
 
 ## 13. Open Follow-Ups
 

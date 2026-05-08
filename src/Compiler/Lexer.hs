@@ -1,6 +1,8 @@
 module Compiler.Lexer where
 
 import Data.Char (isSpace, isAlpha, isAlphaNum, isUpper, isDigit)
+import Data.Map.Strict (Map)
+import qualified Data.Map.Strict as Map
 import Data.Function ((&))
 import Data.Text (Text)
 import Lens.Micro ((.~))
@@ -23,6 +25,7 @@ data TokenClass
   | TokFalse
   | TokColon        -- ^ The colon operator
   | TokLet          -- ^ The `let` keyword
+  | TokDef          -- ^ The `def` keyword
   | TokIn           -- ^ The `in` keyword
   | TokLam          -- ^ The `\` or `fn` keyword for lambdas
   | TokArrow        -- ^ The `->` operator
@@ -65,6 +68,20 @@ data ScannerState = MkScannerState
   , col  :: !Int
   } deriving (Show, Eq, Generic) 
 
+-- | Map of reserved keywords to their token class
+reservedWords :: Map Text TokenClass
+reservedWords = Map.fromList
+  [ ("let",    TokLet)
+  , ("def",    TokDef)
+  , ("in",     TokIn)
+  , ("fn",     TokLam)
+  , ("forall", TokForall)
+  , ("case",   TokCase)
+  , ("of",     TokOf)
+  , ("True",   TokTrue)
+  , ("False",  TokFalse)
+  ]
+
 -- | The core scanning loop. Takes handles for State and Exceptionsshared, returns a list of tokens
 scanTokens
   :: forall st ex es. (st :> es, ex :> es)
@@ -86,15 +103,15 @@ scanTokens st ex = loop []
         mc <- advance st
         case mc of 
           -- Single character operators
-          Just '\\' -> emit TokLam      startSt acc
-          Just '('  -> emit TokLParen   startSt acc
-          Just ')'  -> emit TokRParen   startSt acc
-          Just '.'  -> emit TokDot      startSt acc
-          Just '∀'  -> emit TokForall   startSt acc
-          Just '{'  -> emit TokLBrace   startSt acc
-          Just '}'  -> emit TokRBrace   startSt acc
-          Just ','  -> emit TokComma    startSt acc
-          Just '|'  -> emit TokPipe     startSt acc
+          Just '\\' -> emit TokLam    startSt acc
+          Just '('  -> emit TokLParen startSt acc
+          Just ')'  -> emit TokRParen startSt acc
+          Just '.'  -> emit TokDot    startSt acc
+          Just '∀'  -> emit TokForall startSt acc
+          Just '{'  -> emit TokLBrace startSt acc
+          Just '}'  -> emit TokRBrace startSt acc
+          Just ','  -> emit TokComma  startSt acc
+          Just '|'  -> emit TokPipe   startSt acc
           Just '_'  -> do
             next <- peek st
             case next of
@@ -165,17 +182,11 @@ scanTokens st ex = loop []
             let ident = T.singleton c <> rest
 
             -- Keyword routing
-            case ident of
-              "let"    -> emit TokLet startSt acc
-              "in"     -> emit TokIn startSt acc
-              "fn"     -> emit TokLam startSt acc    -- 'fn' as an alternative to '\'
-              "forall" -> emit TokForall startSt acc
-              "case"   -> emit TokCase startSt acc
-              "of"     -> emit TokOf startSt acc
-              "True"   -> emit TokTrue startSt acc
-              "False"  -> emit TokFalse startSt acc
-              _ | isUpper c -> emit (TokUIdent ident) startSt acc
-              _             -> emit (TokIdent ident) startSt acc
+            case Map.lookup ident reservedWords of
+              Just tokClass -> emit tokClass startSt acc
+              Nothing
+                | isUpper c -> emit (TokUIdent ident) startSt acc
+                | otherwise -> emit (TokIdent ident) startSt acc
 
           -- Numeric literals
           Just c | isDigit c -> do

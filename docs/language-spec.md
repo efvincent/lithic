@@ -1,7 +1,7 @@
 # Lithic Language Specification (Living Core Spec)
 
 Status: Active living spec for implemented behavior.
-Version: 0.2 (2026-05-07)
+Version: 0.3 (2026-05-08)
 Scope baseline: Parser + current bidirectional checker through Phase 7.
 
 This document is the normative source for the currently implemented Lithic surface language and static semantics. Where implementation and docs disagree, this spec is the authority to reconcile against.
@@ -79,11 +79,11 @@ Current role split:
 
 The lexer recognizes the following core keywords/symbols used by the implemented grammar:
 
-- `let`, `in`
+- `let`, `def`, `in`
 - `case`, `of`
 - `forall`
 - `True`, `False`
-- `\\` (lambda)
+- `\\`, `fn` (lambda introducers)
 - `=>` (term-level lambda and case branch delimiter)
 - `->` (type-level function arrow)
 - `:` (type annotation)
@@ -162,24 +162,31 @@ Field ::= label "=" Expr
 Notes:
 1. `UIdent Expr` payloads are currently required; nullary constructors are represented with an explicit empty-record payload (for example, `None {}`).
 2. Record labels in row-like forms may be lowercase or uppercase at parser level.
-3. `fn` lambda syntax is documented in project guidance as accepted intent, but parser support is currently via `\\`; treat `fn` as Reserved until parser support lands.
+3. `fn` and `\\` both tokenize to `TokLam` and are accepted as lambda introducers.
 
 ### 3.4 Declaration Forms (Reserved)
 
-The current parser is expression-oriented and does not yet parse declaration groups. The forms below are reserved roadmap syntax and are not accepted by the current parser.
+Current parser entrypoint status:
+1. `runParser` remains expression-oriented.
+2. `parseTopLevel` supports a minimal declaration form: `def Pattern = Expr`.
+3. Declaration groups, signatures, guards, and function equations remain reserved roadmap syntax.
 
 Status table for planned declaration forms:
 
 | Form | Target Syntax | Implementation Status | Notes |
 | --- | --- | --- | --- |
+| Minimal top-level def declaration | `def pat = expr` | Implemented (parseTopLevel only) | Requires EOF after declaration; not yet threaded through REPL evaluation environment. |
 | Function equation (single clause) | `f p1 ... pn = expr` | Not implemented yet | Will parse as a declaration clause, not an expression form. |
 | Function equation (multi clause) | repeated `f ... = ...` clauses | Not implemented yet | Clauses will be grouped by function name into one declaration unit. |
 | Guarded clause | `f p1 ... pn` then `| guard => expr` lines | Not implemented yet | Guard RHS uses fat arrow to remain consistent with term-level branch delimiters. |
 | Pattern-headed clause | `f <pattern> ... = expr` | Not implemented yet | Will lower through the same match-analysis pipeline as `case`. |
 
 ```text
-Decl ::= ident Pattern* "=" Expr
-                      | ident Pattern* GuardedRhs+
+TopLevel ::= Decl | Expr
+
+Decl ::= "def" Pattern "=" Expr
+       | ident Pattern* "=" Expr
+       | ident Pattern* GuardedRhs+
 
 GuardedRhs ::= "|" GuardExpr "=>" Expr
 GuardExpr ::= Expr

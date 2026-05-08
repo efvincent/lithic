@@ -213,12 +213,17 @@ Status: Completed in 0.9.3.0 documentation milestone.
 * **Top-level binding design notes:**
   * The current surface syntax only supports expressions — all binding is local via `let`. Top-level forms are required before Lithic programs become composable beyond a single expression.
   * Top-level bindings are declaration-level: `def f x = body` or `let f = \x => body` at module scope, distinct from expression-level `let`.
+  * REPL and batch compiler should be separate executables. The compiler library must expose a frontend-agnostic API, and compiler modules must not depend on REPL/TUI modules.
   * Elaboration must handle declaration groups: mutually recursive definitions within a group, ordering constraints, and separate Core lowering for declaration forms vs. expression forms.
   * Top-level bindings must thread through the evaluator and REPL: the REPL should accumulate a top-level environment across inputs rather than resetting per expression.
   * Type signatures at declaration scope (e.g., `f :: a -> a`) are a parallel addition; initial implementation may defer to inferred types.
+* **Status (May 2026):**
+  * Phase 9A parser foundation is in place: lexer keyword support for `def`, top-level AST carrier types, `parseTopLevel`, and parser declaration baseline tests (including a passing `def x = 1` case).
+  * Remaining work is primarily declaration richness (signatures/equation groups/guards), REPL persistence, and Core/Elaborator declaration-group plumbing.
 * **Tasks:**
   * [ ] Add syntax highlighting, stronger multi-line editing ergonomics, better history/navigation behavior, and tighter evaluator-aware feedback.
-  * [ ] Add parser support for top-level binding declarations (`def`/`let` at module scope) with optional type signature annotations.
+  * [x] Add parser support for initial top-level `def` declaration form (`def p = expr`) and top-level parse routing.
+  * [ ] Extend parser support to full top-level binding declarations (`def`/`let` at module scope) with optional type signature annotations.
   * [ ] Add parser support for local function-equation syntax with shared-name clauses.
   * [ ] Add guard syntax on function equations (Haskell-style guard lists) and lower to decision trees.
   * [ ] Add pattern-headed function equations and desugar to `case` while preserving source spans.
