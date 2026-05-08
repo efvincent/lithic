@@ -22,8 +22,8 @@ parserDeclarationsUnitTests =
     , testCase "file-scope let without in is currently rejected" $
         expectTopLevelFailure "let x = 1"
 
-    , testCase "equation-style top-level declaration is currently rejected" $
-        expectTopLevelFailure "id x = x"
+    , testCase "equation-style top-level declaration parses successfully (Phase 9D)" $
+      expectTopLevelDeclSuccess "id x = x"
 
     , testCase "signature without equation parses successfully (Phase 9B)" $
       expectTopLevelDeclSuccess "id : Int"

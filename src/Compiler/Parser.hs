@@ -115,7 +115,8 @@ parseTopLevel toks =
               Nothing -> throw ex (MkParseError "Unexpected EOF after declaration" declSpan)
 
           Just t | TokIdent name <- t.cls -> do
-            _ <- advance st 
+            startState <- get st
+            _ <- advance st
             mNext <- peek st
             case mNext of
               Just t' | t'.cls == TokColon -> do
@@ -127,12 +128,11 @@ parseTopLevel toks =
                   Just e | e.cls == TokEOF ->
                     pure (TDecl (DeclSig sigSpan name sigTy))
                   Just e | TokIdent eqName <- e.cls ->
-                    if eqName == name
-                    then do
+                    if eqName == name then do
                       _ <- advance st
                       expect TokAssign st ex
                       rhs <- parseExpr (precVal PrecLowest) st ex
-                      let rhsAnn = Ann(mergeSpan (getSpan rhs) (getTypeSpan sigTy)) rhs sigTy
+                      let rhsAnn = Ann (mergeSpan (getSpan rhs) (getTypeSpan sigTy)) rhs sigTy
                           pat    = PVar e.span name
                           defSp  = mergeSpan t.span (getSpan rhsAnn)
                       mAfter <- peek st
@@ -141,22 +141,27 @@ parseTopLevel toks =
                           pure (TDecl (DeclDef defSp pat rhsAnn))
                         Just badTok ->
                           throw ex (MkParseError "Expected EOF after declaration" badTok.span)
-                        Nothing -> throw ex (MkParseError "Unexpected EOF after declaration" e.span)
+                        Nothing ->
+                          throw ex (MkParseError "Unexpected EOF after declaration" defSp)
                     else
                       throw ex (MkParseError "Signature/equation name mismatch" e.span)
                   Just e ->
                     throw ex (MkParseError "Expected EOF after declaration" e.span)
                   Nothing ->
                     throw ex (MkParseError "Unexpected EOF after declaration" sigSpan)
-
               _ -> do
-                pushBack t st
-                expr <- parseExpr (precVal PrecLowest) st ex
-                mEnd <- peek st
-                case mEnd of
-                  Just e | e.cls == TokEOF -> pure (TExpr expr)
-                  Just e -> throw ex (MkParseError "Expected EOF after expression" e.span)
-                  Nothing -> throw ex (MkParseError "Unexpected EOF after expression" (getSpan expr))
+                mDecl <- tryParseEquationDecl t name st ex
+                case mDecl of
+                  Just topLevel ->
+                    pure topLevel
+                  Nothing -> do
+                    put st startState
+                    expr <- parseExpr (precVal PrecLowest) st ex
+                    mEnd <- peek st
+                    case mEnd of
+                      Just e | e.cls == TokEOF -> pure (TExpr expr)
+                      Just e -> throw ex (MkParseError "Expected EOF after expression" e.span)
+                      Nothing -> throw ex (MkParseError "Unexpected EOF after expression" (getSpan expr))
 
           _ -> do
             expr <- parseExpr (precVal PrecLowest) st ex
@@ -166,6 +171,53 @@ parseTopLevel toks =
               Just t' -> throw ex (MkParseError "Expected EOF after expression" t'.span)
               Nothing -> throw ex (MkParseError "Unexpected EOF after declaration" (getSpan expr))
               
+-- | Try to parse a single equation-style top-level declaration tail:
+-- `name p1 ... pn = rhs`
+-- If the shape does not match an equation clause, restore parser state and return Nothing.
+tryParseEquationDecl
+  :: forall st ex es. (st :> es, ex :> es)
+  => Token -> Text -> State ParserState st -> Exception ParseError ex -> Eff es (Maybe TopLevel)
+tryParseEquationDecl nameTok name st ex = do
+  startState <- get st
+  mNext <- peek st
+  case mNext of
+    Just tok | isPatternStarter tok.cls -> do
+      firstPat <- parsePattern st ex
+      mPats <- gatherPatterns [firstPat] startState
+      case mPats of
+        Nothing -> pure Nothing
+        Just pats -> do
+          expect TokAssign st ex
+          rhs <- parseExpr (precVal PrecLowest) st ex
+          let lamBody = foldr mkLam rhs pats
+              declPat = PVar nameTok.span name
+              declSpan = mergeSpan nameTok.span (getSpan lamBody)
+          mEnd <- peek st
+          case mEnd of
+            Just endTok | endTok.cls == TokEOF ->
+              pure (Just (TDecl (DeclDef declSpan declPat lamBody)))
+            Just badTok ->
+              throw ex (MkParseError "Expceted EOF after declaration" badTok.span)
+            Nothing ->
+              throw ex (MkParseError "Unexpected EOF after declaration" declSpan)
+    _ -> do
+      put st startState
+      pure Nothing
+  where
+    gatherPatterns acc startState = do
+      mTok <- peek st
+      case mTok of
+        Just tok | tok.cls == TokAssign ->
+          pure (Just (reverse acc))
+        Just tok | isPatternStarter tok.cls -> do
+          pat <- parsePattern st ex
+          gatherPatterns (pat : acc) startState
+        _ -> do
+          put st startState
+          pure Nothing
+    mkLam pat body =
+      Lam (mergeSpan (getPatternSpan pat) (getSpan body)) pat Nothing body
+
 -- | Recursively parses the interior fields of a record definition
 -- Handles standard fields separated by commas, and row extensions 
 -- indicated by a pipe.
@@ -580,6 +632,18 @@ isAppStarter = \case
   TokCase     -> True
   _           -> False
 
+isPatternStarter :: TokenClass -> Bool
+isPatternStarter = \case
+  TokWildcard -> True
+  TokIdent _ -> True
+  TokInt _ -> True
+  TokFloat _ -> True
+  TokString _ -> True
+  TokTrue -> True
+  TokFalse -> True
+  TokUIdent _ -> True
+  _ -> False
+  
 -- | Pure entry point for the Parser.
 runParser :: [Token] -> Either ParseError Expr
 runParser toks = 

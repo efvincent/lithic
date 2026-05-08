@@ -221,12 +221,14 @@ Status: Completed in 0.9.3.0 documentation milestone.
   * Phase 9A parser foundation is in place: lexer keyword support for `def`, top-level AST carrier types, `parseTopLevel`, and parser declaration baseline tests (including a passing `def x = 1` case).
   * Phase 9B adds signature-only top-level parsing (`name : Type`) in `parseTopLevel` with test coverage.
   * Phase 9B.2 adds same-name signature+equation pairing (`name : Type` followed by `name = expr`) in `parseTopLevel`.
+  * Phase 9D adds single-clause equation-style top-level declaration parsing (`f p1 ... pn = expr`) lowered through parser-produced lambdas.
   * Remaining work is primarily multi-clause/guard grouping, REPL persistence, and Core/Elaborator declaration-group plumbing.
 * **Tasks:**
   * [ ] Add syntax highlighting, stronger multi-line editing ergonomics, better history/navigation behavior, and tighter evaluator-aware feedback.
   * [x] Add parser support for initial top-level `def` declaration form (`def p = expr`) and top-level parse routing.
   * [x] Extend parser support to minimal top-level binding declarations with optional type signatures (`def`, signature-only, and same-name signature+equation pairing).
   * [ ] Extend parser support to full declaration grouping semantics (`def`/`let` at module scope, multi-clause equations, and grouped signature association).
+  * [x] Add parser support for single-clause equation-style declarations (`f p1 ... pn = expr`) lowered to declaration-level lambda form.
   * [ ] Add parser support for local function-equation syntax with shared-name clauses.
   * [ ] Add guard syntax on function equations (Haskell-style guard lists) and lower to decision trees.
   * [ ] Add pattern-headed function equations and desugar to `case` while preserving source spans.
