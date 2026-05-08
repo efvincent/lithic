@@ -332,5 +332,5 @@ wildcardPat :: Pattern
 wildcardPat = PWildcard dummySpan
 
 -- | Placeholder span for synthesized witness patterns.
-dummySpan :: SourceSpan
-dummySpan = MkSourceSpan 0 0 0 0
+dummySpan :: Span
+dummySpan = MkSpan 0 0 0 0

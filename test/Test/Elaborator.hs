@@ -102,14 +102,14 @@ elaboratorUnitTests =
         OpSet
         (Lit sp (LInt 1))
 
-sp :: SourceSpan
-sp = MkSourceSpan 1 1 1 1
+sp :: Span
+sp = MkSpan 1 1 1 1
 
-outerRecordSp :: SourceSpan
-outerRecordSp = MkSourceSpan 10 1 10 7
+outerRecordSp :: Span
+outerRecordSp = MkSpan 10 1 10 7
 
-fieldLitSp :: SourceSpan
-fieldLitSp = MkSourceSpan 10 5 10 5
+fieldLitSp :: Span
+fieldLitSp = MkSpan 10 5 10 5
 
-closingBraceSp :: SourceSpan
-closingBraceSp = MkSourceSpan 10 7 10 7
+closingBraceSp :: Span
+closingBraceSp = MkSpan 10 7 10 7

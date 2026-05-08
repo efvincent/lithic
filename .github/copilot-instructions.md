@@ -15,7 +15,7 @@ Keep phases highly decoupled and preserve clear subsystem boundaries.
 
 1. Lexical Analysis (Lexer):
    - Implement a maximal munch strategy.
-   - Track precise source locations with `SourceSpan` on all tokens for diagnostics and future LSP-facing workflows.
+   - Track precise source locations with `Span` on all tokens for diagnostics and future LSP-facing workflows.
    - Keep the lexer pure at the public entry point (`runLexer`).
 
 2. Parsing (Pratt Parser) — **COMPLETED**:

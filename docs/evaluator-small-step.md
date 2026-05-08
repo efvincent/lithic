@@ -113,7 +113,7 @@ Core invariants for Phase 8:
 Recommended module boundaries for this codebase:
 1. Keep surface AST in `Compiler.AST` (existing parser/typechecker target).
 2. Add Core AST in a separate module `Compiler.AST.Core`.
-3. Keep shared primitive data (`SourceSpan`, `Literal`) in `Compiler.AST`
+3. Keep shared primitive data (`Span`, `Literal`) in `Compiler.AST`
    initially for minimal churn; extract to a shared module later only if needed.
 4. Evaluator and backend-facing passes should consume `Compiler.AST.Core`, not
    surface `Expr`, once the elaboration subset is in place.
@@ -466,12 +466,12 @@ data Value
 type Env = Map Text Value
 
 data EvalError
-   = EvalUnboundVar SourceSpan Text
-   | EvalNonFunctionApp SourceSpan Value
-   | EvalPatternMismatch SourceSpan CorePattern Value
-   | EvalNonExhaustiveCase SourceSpan Value
-   | EvalMissingField SourceSpan Text Value
-   | EvalNotImplemented SourceSpan Text
+   = EvalUnboundVar Span Text
+   | EvalNonFunctionApp Span Value
+   | EvalPatternMismatch Span CorePattern Value
+   | EvalNonExhaustiveCase Span Value
+   | EvalMissingField Span Text Value
+   | EvalNotImplemented Span Text
 
 evalCore :: CoreExpr -> Either EvalError Value
 ```

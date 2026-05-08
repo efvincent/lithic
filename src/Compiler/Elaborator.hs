@@ -10,7 +10,7 @@ import Compiler.AST.Core
 -- | Elaboration errors when translating surface AST to Core AST
 data ElabError = MkElabError
   { msg :: !Text
-  , span :: !SourceSpan
+  , span :: !Span
   } deriving (Show, Eq, Generic)
 
 -- | Elaborate a surface expression into a core expression
@@ -84,5 +84,5 @@ collectRecordFields = go []
         _ -> elabFail (getSpan e) "Record core lowering expects a closed literal ending in {}."
 
 -- | construct a typed elaboration failure
-elabFail :: forall a. SourceSpan -> Text -> Either ElabError a
+elabFail :: forall a. Span -> Text -> Either ElabError a
 elabFail sp message = Left (MkElabError message sp)

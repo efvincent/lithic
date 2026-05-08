@@ -40,7 +40,7 @@ data Env = MkEnv
 -- | Localized type errors utilizing parsed SourceSpans
 data TypeError = MkTypeError
   { msg :: !Text
-  , span :: !SourceSpan
+  , span :: !Span
   } deriving (Show, Eq, Generic)
 
 --------------------------------
@@ -50,7 +50,7 @@ data TypeError = MkTypeError
 -- | Generate a fresh meta-variable
 freshMeta 
   :: forall st es. (st :> es) 
-  => SourceSpan -> State TCState st -> Eff es Type
+  => Span -> State TCState st -> Eff es Type
 freshMeta sp st = do
   curSt <- get st
   let mId = curSt.nextMeta
@@ -359,7 +359,7 @@ check st envHandle ex expr expectedTy = do
 -- | Verify that the inferred type subsumes the expected type.
 subsumes
   :: forall st ex es. (st :> es, ex :> es)
-  => State TCState st -> Exception TypeError ex -> Type -> Type -> SourceSpan -> Eff es ()
+  => State TCState st -> Exception TypeError ex -> Type -> Type -> Span -> Eff es ()
 subsumes st ex inferred expected sp = do
   infForced <- force st inferred
   expForced <- force st expected
@@ -416,7 +416,7 @@ zonk st ty = do
 -- | Unify tow types, updating the substitution state if necessary.
 unify
   :: forall st ex es. (st :> es, ex :> es)
-  => State TCState st -> Exception TypeError ex -> Type -> Type -> SourceSpan -> Eff es ()
+  => State TCState st -> Exception TypeError ex -> Type -> Type -> Span -> Eff es ()
 unify st ex t1 t2 sp = do
   ty1 <- force st t1
   ty2 <- force st t2
@@ -485,7 +485,7 @@ rewriteRow
   :: forall st ex es. (st :> es, ex :> es)
   => State TCState st
   -> Exception TypeError ex
-  -> SourceSpan
+  -> Span
   -> Text -> Type -> Eff es (Type, Type)
 rewriteRow st ex sp targetLabel rowTy = do
   forcedRow <- force st rowTy
@@ -513,7 +513,7 @@ rewriteRow st ex sp targetLabel rowTy = do
 -- nominal records (stubbed for future module environment lookup).
 resolvePath
   :: forall st ex es. (st :> es, ex :> es)
-  => State TCState st -> Exception TypeError ex -> SourceSpan -> Type -> [PathSegment] -> Eff es Type
+  => State TCState st -> Exception TypeError ex -> Span -> Type -> [PathSegment] -> Eff es Type
 resolvePath st ex sp baseTy = \case
   [] -> pure baseTy
   (PathField label : restPath) -> do
@@ -542,7 +542,7 @@ resolvePath st ex sp baseTy = \case
 -- | Bind a meta-variable, ensuring it doesn't create infinite types (occurs check).
 bindMeta
   :: forall st ex es. (st :> es, ex :> es) 
-  => State TCState st -> Exception TypeError ex -> Int -> Type -> SourceSpan -> Eff es ()
+  => State TCState st -> Exception TypeError ex -> Int -> Type -> Span -> Eff es ()
 bindMeta st ex mId ty sp = do
   -- Execute the effectful occurs check
   hasCycle <- occurs st mId ty
@@ -637,7 +637,7 @@ subBound subMap ty =
 -- | Generate a fresh rigit skolem constant
 freshSkolem
   :: forall st es. (st :> es) 
-  => SourceSpan -> Text -> State TCState st -> Eff es Type
+  => Span -> Text -> State TCState st -> Eff es Type
 freshSkolem sp name st = do
   curSt <- get st
   let sId = curSt.nextMeta

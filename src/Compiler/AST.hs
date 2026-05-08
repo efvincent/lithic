@@ -4,15 +4,15 @@ import Data.Text (Text)
 import GHC.Generics (Generic)
 
 -- | Tracks the location of a node in the source code for localized error reporting
-data SourceSpan = MkSourceSpan
+data Span = MkSpan
   { startLine :: !Int
   , startCol  :: !Int
   , endLine   :: !Int
   , endCol    :: !Int
   } deriving (Eq, Generic)
 
-instance Show SourceSpan where
-  show :: SourceSpan -> String
+instance Show Span where
+  show :: Span -> String
   show ss 
     = "[" <> show ss.startLine 
     <> "," 
@@ -25,7 +25,7 @@ instance Show SourceSpan where
 
 -- | Top-level declarations (Phase 9 addition)
 data Decl
-  = DeclDef SourceSpan Pattern Expr
+  = DeclDef Span Pattern Expr
   deriving (Show, Eq, Generic)
 
 -- | Top level parse result: either a declaration or an expression.
@@ -44,26 +44,26 @@ data Kind
 
 -- | The core type representation for Lithic
 data Type
-  = TVar SourceSpan Text
-  | TInt SourceSpan
-  | TFloat SourceSpan
-  | TString SourceSpan
-  | TBool SourceSpan
-  | TArrow SourceSpan Type Type
-  | TForall SourceSpan [Text] Type        -- ^ Universal quantification: forall a b. a -> b
-  | TMeta SourceSpan Int                  -- ^ A unification meta-variable
-  | TSkolem SourceSpan Int Text           -- ^ A rigid skolem constant for Rank-2 typechecking
-  | TVariant SourceSpan Type
+  = TVar Span Text
+  | TInt Span
+  | TFloat Span
+  | TString Span
+  | TBool Span
+  | TArrow Span Type Type
+  | TForall Span [Text] Type        -- ^ Universal quantification: forall a b. a -> b
+  | TMeta Span Int                  -- ^ A unification meta-variable
+  | TSkolem Span Int Text           -- ^ A rigid skolem constant for Rank-2 typechecking
+  | TVariant Span Type
   
   -- Row Polymorphism (Kind:KRow)
-  | TRowEmpty SourceSpan
-  | TRowExtend SourceSpan Text Type Type  -- ^ Label, Type of the field, and the rest of the Row
+  | TRowEmpty Span
+  | TRowExtend Span Text Type Type  -- ^ Label, Type of the field, and the rest of the Row
 
   -- Nominal types (Kind:KType)
-  | TNominal SourceSpan Text
+  | TNominal Span Text
 
   -- Bridges KRow to KType. Turns a raw row of fields into an actual usable Record type.
-  | TRecord SourceSpan Type
+  | TRecord Span Type
   deriving (Show, Eq, Generic)
 
 -- Unary and binary operations
@@ -94,15 +94,15 @@ data Literal
 
 -- | Represents a pattern in a binder (Lambda, Let, or Case)
 data Pattern
-  = PVar SourceSpan Text
-  | PWildcard SourceSpan 
-  | PLit SourceSpan Literal
-  | PVariant SourceSpan Text Pattern
-  | PRecord SourceSpan [(Text, Pattern)]
+  = PVar Span Text
+  | PWildcard Span 
+  | PLit Span Literal
+  | PVariant Span Text Pattern
+  | PRecord Span [(Text, Pattern)]
   deriving (Show, Eq, Generic)
 
 -- | Extracts the source span from a Pattern node
-getPatternSpan :: Pattern -> SourceSpan
+getPatternSpan :: Pattern -> Span
 getPatternSpan = \case
   PVar sp _       -> sp
   PWildcard sp    -> sp
@@ -112,27 +112,27 @@ getPatternSpan = \case
 
 -- | The core expression AST for lithic
 data Expr
-  = Var SourceSpan Text                      -- ^ A variable identifier: x
-  | Lit SourceSpan Literal                   -- ^ A primitive literal
-  | Lam SourceSpan Pattern (Maybe Type) Expr -- ^ A lambda abstraction, optionally annotated: \x : Int -> expr
-  | App SourceSpan Expr Expr                 -- ^ A function application: f x
-  | Let SourceSpan Pattern Expr Expr         -- ^ Explicit let-binding for FBIP: let x = expr1 in expr2
-  | Ann SourceSpan Expr Type                 -- ^ Explicit type annotation: expr : Type
+  = Var Span Text                      -- ^ A variable identifier: x
+  | Lit Span Literal                   -- ^ A primitive literal
+  | Lam Span Pattern (Maybe Type) Expr -- ^ A lambda abstraction, optionally annotated: \x : Int -> expr
+  | App Span Expr Expr                 -- ^ A function application: f x
+  | Let Span Pattern Expr Expr         -- ^ Explicit let-binding for FBIP: let x = expr1 in expr2
+  | Ann Span Expr Type                 -- ^ Explicit type annotation: expr : Type
   -- Record additions
-  | RecEmpty SourceSpan
-  | RecExtend SourceSpan Text Expr Expr                   -- ^ Label, Field value, Rest of record
-  | RecSelect SourceSpan Expr Text                        -- ^ Record expression, Label to extract
-  | RecUpdate SourceSpan Expr [PathSegment] UpdateOp Expr -- ^ Native Lenses
+  | RecEmpty Span
+  | RecExtend Span Text Expr Expr                   -- ^ Label, Field value, Rest of record
+  | RecSelect Span Expr Text                        -- ^ Record expression, Label to extract
+  | RecUpdate Span Expr [PathSegment] UpdateOp Expr -- ^ Native Lenses
   -- Pattern matching
-  | Case SourceSpan Expr [(Pattern, Expr)]   -- ^ case expression
-  | Variant SourceSpan Text Expr             -- ^ Constructing a variant: `Ok 42`
+  | Case Span Expr [(Pattern, Expr)]   -- ^ case expression
+  | Variant Span Text Expr             -- ^ Constructing a variant: `Ok 42`
   -- Unary and binary operations
-  | Unary SourceSpan UnOp Expr
-  | Binary SourceSpan BinOp Expr Expr
+  | Unary Span UnOp Expr
+  | Binary Span BinOp Expr Expr
   deriving (Show, Eq, Generic)
 
 -- | Extract the source span from a Type node
-getTypeSpan :: Type -> SourceSpan
+getTypeSpan :: Type -> Span
 getTypeSpan = \case
   TVar sp _           -> sp
   TInt sp             -> sp
@@ -150,7 +150,7 @@ getTypeSpan = \case
   TRecord sp _        -> sp
 
 -- | Extracts the source span from any AST node
-getSpan :: Expr -> SourceSpan
+getSpan :: Expr -> Span
 getSpan = \case
   Var sp _             -> sp
   Lit sp _             -> sp

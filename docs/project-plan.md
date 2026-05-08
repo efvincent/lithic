@@ -27,7 +27,7 @@ These decisions are locked in and should guide all future implementation phases:
 * **Compiler Implementation:** Haskell (targeting GHC 9.14.1+ for LTS stability and zero-cost abstraction optimization).
 * **Effect Tracking:** The `Bluefin` effect system. We strictly avoid monad transformer stacks (MTL) in favor of explicit, localized effect handles (e.g., `Reader Env`, `State TCState`, `Exception TypeError`). The same Bluefin-style lexical capability model is the basis for Lithic's user-facing effect system: effects in user programs are tracked via row polymorphism (e.g., `{ io } String`) and compiled to C dictionary pointers, not monadic wrappers.
 * **Lenses:** `microlens` and `generic-lens` for lightweight, boilerplate-free state updates.
-* **Parsing:** A hand-rolled lexer capturing precise `SourceSpan` data, feeding into a Pratt Parser (Top-Down Operator Precedence) for elegant, extensible precedence handling.
+* **Parsing:** A hand-rolled lexer capturing precise `Span` data, feeding into a Pratt Parser (Top-Down Operator Precedence) for elegant, extensible precedence handling.
 * **Typechecker Architecture:** A **Bidirectional** engine splitting AST traversal into `check` (top-down expected types) and `infer` (bottom-up type synthesis). 
 * **Unification:** Stateful strict unification rather than constraint-graph generation. `TMeta` and `TSkolem` variables are mutated/bound in a fast `Bluefin.State` dictionary.
 * **Testing:** Snapshot testing using `tasty` and `tasty-golden` to verify the pure compiler pipeline and localized error messages without brittle unit tests.
@@ -344,14 +344,14 @@ Design constraints for implementation:
 ### 📅 Phase 16: Tooling Ecosystem (LSP & Debugger)
 * **Objective:** Elevate Lithic to a production-ready language with a first-class VSCode developer experience.
 * **Tasks:**
-  * [ ] Build a Language Server Protocol (LSP) server implementation, leveraging the `SourceSpan` tracking carried through all compiler phases for precise hover/go-to-definition/diagnostics.
+  * [ ] Build a Language Server Protocol (LSP) server implementation, leveraging the `Span` tracking carried through all compiler phases for precise hover/go-to-definition/diagnostics.
   * [ ] Implement the LSP `textDocument/diagnostic` push model so type errors appear inline in VSCode without requiring a manual build step.
   * [ ] Implement hover (`textDocument/hover`) to surface inferred types and kind information at the cursor position.
   * [ ] Implement go-to-definition and find-references for top-level and local bindings.
   * [ ] Implement semantic syntax highlighting via LSP `textDocument/semanticTokens`.
   * [ ] Introduce debugger adapter protocol (DAP) support to enable VSCode breakpoint, step, and watch variable features:
     * The evaluator must carry a structured execution trace (small-step transition log) that the DAP adapter can expose as step events.
-    * Breakpoints map to `SourceSpan`-tagged Core nodes; the evaluator checks the active breakpoint set before each reduction step.
+    * Breakpoints map to `Span`-tagged Core nodes; the evaluator checks the active breakpoint set before each reduction step.
     * Watch variables are resolved against the current `Env` (evaluator environment) at each pause point, formatted using the same pretty-printer used by the REPL.
     * Step-in, step-over, and step-out correspond to single-step, skip-subterm, and return-to-parent strategies in the small-step machine.
   * [ ] Ensure the DAP and LSP servers are structurally isolated from compiler stages (no Brick/TUI imports in the server layer).

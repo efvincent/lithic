@@ -45,8 +45,8 @@ patternCoverageUnitTests =
         checkCasePatterns tOpenResult [pOkSuccess, pOkAny, pErrAny, pWild] @?= Right ()
     ]
 
-sp :: SourceSpan
-sp = MkSourceSpan 1 1 1 1
+sp :: Span
+sp = MkSpan 1 1 1 1
 
 pWild :: Pattern
 pWild = PWildcard sp
