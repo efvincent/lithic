@@ -66,6 +66,7 @@ test-suite lithic-test
                     , Test.PatternCoverage
                     , Test.Elaborator
                     , Test.Evaluator
+                    , Test.ParserDeclarations
     type:             exitcode-stdio-1.0
     hs-source-dirs:   test
     main-is:          Main.hs

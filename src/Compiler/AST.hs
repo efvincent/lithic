@@ -23,6 +23,17 @@ instance Show SourceSpan where
     <> show ss.endCol 
     <> "]"
 
+-- | Top-level declarations (Phase 9 addition)
+data Decl
+  = DeclDef SourceSpan Pattern Expr
+  deriving (Show, Eq, Generic)
+
+-- | Top level parse result: either a declaration or an expression.
+data TopLevel 
+  = TDecl Decl
+  | TExpr Expr
+  deriving (Show, Eq, Generic)
+  
 -- | Represents the Kind of a Type (the "type of a Type")
 -- Crucial for separating structural rows from nominal structs
 data Kind
