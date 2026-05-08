@@ -37,7 +37,7 @@ data Env = MkEnv
   { bindings :: ![(Text, Type)]
   } deriving (Show, Eq, Generic)
 
--- | Localized type errors utilizing parsed SourceSpans
+-- | Localized type errors utilizing parsed @Spans@
 data TypeError = MkTypeError
   { msg :: !Text
   , span :: !Span
@@ -413,7 +413,7 @@ zonk st ty = do
     TVariant sp rowTy -> TVariant sp <$> zonk st rowTy
     _ -> pure forcedTy
 
--- | Unify tow types, updating the substitution state if necessary.
+-- | Unify two types, updating the substitution state if necessary.
 unify
   :: forall st ex es. (st :> es, ex :> es)
   => State TCState st -> Exception TypeError ex -> Type -> Type -> Span -> Eff es ()
@@ -634,7 +634,7 @@ subBound subMap ty =
     TVariant sp rowTy -> TVariant sp (subBound subMap rowTy)
     _ -> ty -- Catches TMeta and TSkolem
     
--- | Generate a fresh rigit skolem constant
+-- | Generate a fresh rigid skolem constant
 freshSkolem
   :: forall st es. (st :> es) 
   => Span -> Text -> State TCState st -> Eff es Type

@@ -114,7 +114,7 @@ getPatternSpan = \case
 data Expr
   = Var Span Text                      -- ^ A variable identifier: x
   | Lit Span Literal                   -- ^ A primitive literal
-  | Lam Span Pattern (Maybe Type) Expr -- ^ A lambda abstraction, optionally annotated: \x : Int -> expr
+  | Lam Span Pattern (Maybe Type) Expr -- ^ A lambda abstraction, optionally annotated: \x : Int => expr
   | App Span Expr Expr                 -- ^ A function application: f x
   | Let Span Pattern Expr Expr         -- ^ Explicit let-binding for FBIP: let x = expr1 in expr2
   | Ann Span Expr Type                 -- ^ Explicit type annotation: expr : Type
