@@ -25,9 +25,12 @@ Normative for:
 - Error-class contracts and source-span expectations.
 
 Informative only for:
-- Future evaluator/runtime semantics.
+- Future evaluator/runtime semantics (baseline direction: strict, small-step; full formalization still in progress).
 - Future elaboration/core lowering semantics.
 - Future constraint solving and capability overloading semantics.
+
+Current evaluator draft reference:
+- `docs/evaluator-small-step.md` (Phase 8 formal artifact draft).
 
 ### 1.3 Change Policy (Anti-Drift)
 
@@ -56,9 +59,10 @@ Normative implemented semantics (this revision):
 
 Planned/informative semantics (non-normative in this revision):
 1. Evaluator operational semantics and value model.
-2. Surface-to-Core elaboration algorithm and proof obligations.
-3. Capability/type-class solving coherence model.
-4. Declaration-group semantics for function equations and guards.
+2. Minimal Core AST design and Surface-to-Core elaboration algorithm.
+3. Macro expansion/desugaring ordering constraints (parse -> expand -> elaborate).
+4. Capability/type-class solving coherence model.
+5. Declaration-group semantics for function equations and guards.
 
 ## 2. Lexical Specification (Stable unless noted)
 
@@ -342,7 +346,7 @@ Contract requirements:
 ## 7. Out of Scope for This Living Core Spec
 
 Explicitly deferred to later formalization:
-- Full dynamic semantics and evaluation strategy (strict/lazy, small-step/big-step).
+- Full dynamic semantics specification and proof obligations for the strict, small-step evaluator baseline.
 - Core language translation/elaboration judgments.
 - Macro expansion semantics and hygiene model.
 - Full constraint solver coherence proof/model.
