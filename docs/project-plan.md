@@ -219,12 +219,14 @@ Status: Completed in 0.9.3.0 documentation milestone.
   * Type signatures at declaration scope (e.g., `f : a -> a`) are a parallel addition; initial implementation may defer to inferred types.
 * **Status (May 2026):**
   * Phase 9A parser foundation is in place: lexer keyword support for `def`, top-level AST carrier types, `parseTopLevel`, and parser declaration baseline tests (including a passing `def x = 1` case).
-  * Phase 9B slice now adds signature-only top-level parsing (`name : Type`) in `parseTopLevel` with test coverage.
-  * Remaining work is primarily declaration pairing/grouping (signature + equation, multi-clause equations, guards), REPL persistence, and Core/Elaborator declaration-group plumbing.
+  * Phase 9B adds signature-only top-level parsing (`name : Type`) in `parseTopLevel` with test coverage.
+  * Phase 9B.2 adds same-name signature+equation pairing (`name : Type` followed by `name = expr`) in `parseTopLevel`.
+  * Remaining work is primarily multi-clause/guard grouping, REPL persistence, and Core/Elaborator declaration-group plumbing.
 * **Tasks:**
   * [ ] Add syntax highlighting, stronger multi-line editing ergonomics, better history/navigation behavior, and tighter evaluator-aware feedback.
   * [x] Add parser support for initial top-level `def` declaration form (`def p = expr`) and top-level parse routing.
-  * [ ] Extend parser support to full top-level binding declarations (`def`/`let` at module scope) with optional type signature annotations and signature+equation grouping.
+  * [x] Extend parser support to minimal top-level binding declarations with optional type signatures (`def`, signature-only, and same-name signature+equation pairing).
+  * [ ] Extend parser support to full declaration grouping semantics (`def`/`let` at module scope, multi-clause equations, and grouped signature association).
   * [ ] Add parser support for local function-equation syntax with shared-name clauses.
   * [ ] Add guard syntax on function equations (Haskell-style guard lists) and lower to decision trees.
   * [ ] Add pattern-headed function equations and desugar to `case` while preserving source spans.

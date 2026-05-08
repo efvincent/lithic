@@ -88,10 +88,11 @@ peekPrecedence st = do
 -- Supports declaration forms:
 --   1) `def p = e`
 --   2) `ident : Type`
+--   3) `ident : Type` followed by `ident = expr` (same name), lowered to `DeclDef`
+--      with an annotated RHS.
 -- Disambiguation rule:
 -- - At top level, bare `ident : Type` is parsed as a declaration signature.
--- - In this slice, `parseTopLevel` does not provide an expression-annotation
---   escape hatch for that shape.
+-- - `ident : Type` followed by same-name equation is parsed as one declaration form.
 -- In all branches, input must end at EOF.
 parseTopLevel :: [Token] -> Either ParseError TopLevel
 parseTopLevel toks =
@@ -123,9 +124,31 @@ parseTopLevel toks =
                 let sigSpan = mergeSpan t.span (getTypeSpan sigTy)
                 mEnd <- peek st
                 case mEnd of
-                  Just e | e.cls == TokEOF -> pure (TDecl (DeclSig sigSpan name sigTy))
-                  Just e -> throw ex (MkParseError "Expected EOF after declaration" e.span)
-                  Nothing -> throw ex (MkParseError "Unexpected EOF after declaration" sigSpan)
+                  Just e | e.cls == TokEOF ->
+                    pure (TDecl (DeclSig sigSpan name sigTy))
+                  Just e | TokIdent eqName <- e.cls ->
+                    if eqName == name
+                    then do
+                      _ <- advance st
+                      expect TokAssign st ex
+                      rhs <- parseExpr (precVal PrecLowest) st ex
+                      let rhsAnn = Ann(mergeSpan (getSpan rhs) (getTypeSpan sigTy)) rhs sigTy
+                          pat    = PVar e.span name
+                          defSp  = mergeSpan t.span (getSpan rhsAnn)
+                      mAfter <- peek st
+                      case mAfter of
+                        Just endTok | endTok.cls == TokEOF ->
+                          pure (TDecl (DeclDef defSp pat rhsAnn))
+                        Just badTok ->
+                          throw ex (MkParseError "Expected EOF after declaration" badTok.span)
+                        Nothing -> throw ex (MkParseError "Unexpected EOF after declaration" e.span)
+                    else
+                      throw ex (MkParseError "Signature/equation name mismatch" e.span)
+                  Just e ->
+                    throw ex (MkParseError "Expected EOF after declaration" e.span)
+                  Nothing ->
+                    throw ex (MkParseError "Unexpected EOF after declaration" sigSpan)
+
               _ -> do
                 pushBack t st
                 expr <- parseExpr (precVal PrecLowest) st ex
