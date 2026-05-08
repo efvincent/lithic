@@ -8,7 +8,7 @@ import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (Assertion, assertFailure, testCase)
 
 import Compiler.AST (TopLevel(..))
-import Compiler.Lexer (runLexer)
+import Compiler.Lexer (Token(..), TokenClass(..), runLexer)
 import Compiler.Parser (parseTopLevel)
 
 -- | Phase 9 parser baseline for top-level forms.
@@ -48,6 +48,9 @@ parserDeclarationsUnitTests =
 
     , testCase "expression-only input still parses as top-level expression" $
         expectTopLevelExprSuccess "let x = 1 in x"
+
+    , testCase "top-level parse rejects token stream missing EOF" $
+      expectTopLevelFailureWithoutEOF "let x = 1 in x"
     ]
 
 expectTopLevelFailure :: T.Text -> Assertion
@@ -98,3 +101,17 @@ expectTopLevelExprSuccess src =
             TDecl decl ->
               assertFailure
                 ("Expected top-level expression, but parsed declaration: " <> show decl)
+
+expectTopLevelFailureWithoutEOF :: T.Text -> Assertion
+expectTopLevelFailureWithoutEOF src =
+  case runLexer src of
+    Left lexErr ->
+      assertFailure
+        ("Lexer failed: " <> show lexErr)
+    Right toks ->
+      let toksNoEOF = filter (\tok -> tok.cls /= TokEOF) toks
+      in case parseTopLevel toksNoEOF of
+          Left _ -> pure ()
+          Right topLevel ->
+            assertFailure
+              ("Expected parse failure without EOF token, but got: " <> show topLevel)
