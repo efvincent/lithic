@@ -33,9 +33,12 @@ common shared
 library
     import:           shared
     exposed-modules:  Compiler.AST
+                    , Compiler.AST.Core
                     , Compiler.Lexer
                     , Compiler.Parser
                     , Compiler.PatternMatch
+                    , Compiler.Elaborator
+                    , Compiler.Evaluator
                     , Compiler.TypeChecker
                     , Compiler.REPL
                     , Compiler.TUI
@@ -59,6 +62,10 @@ executable lithic-cli
     
 test-suite lithic-test
     import:           shared
+    other-modules:    Test.Golden
+                    , Test.PatternCoverage
+                    , Test.Elaborator
+                    , Test.Evaluator
     type:             exitcode-stdio-1.0
     hs-source-dirs:   test
     main-is:          Main.hs
