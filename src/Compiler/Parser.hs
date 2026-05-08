@@ -103,19 +103,17 @@ parseTopLevel toks =
             let declSpan = mergeSpan t.span (getSpan rhs)
             mNext <- peek st
             case mNext of
-              Just t' | t'.cls == TokEOF ->
-                pure (TDecl (DeclDef declSpan pat rhs))
-              Just t' ->
-                throw ex (MkParseError "Expected EOF after declaration" t'.span)
-              Nothing ->
-                throw ex (MkParseError "Unexpected EOF after declaration" declSpan)
+              Just t' | t'.cls == TokEOF -> pure (TDecl (DeclDef declSpan pat rhs))
+              Just t' -> throw ex (MkParseError "Expected EOF after declaration" t'.span)
+              Nothing -> throw ex (MkParseError "Unexpected EOF after declaration" declSpan)
           _ -> do
             expr <- parseExpr (precVal PrecLowest) st ex
             mNext <- peek st
             case mNext of
               Just t' | t'.cls == TokEOF -> pure (TExpr expr)
               Just t' -> throw ex (MkParseError "Expected EOF after expression" t'.span)
-              Nothing -> pure (TExpr expr)
+              Nothing -> throw ex (MkParseError "Unexpected EOF after declaration" (getSpan expr))
+              
 -- | Recursively parses the interior fields of a record definition
 -- Handles standard fields separated by commas, and row extensions 
 -- indicated by a pipe.
