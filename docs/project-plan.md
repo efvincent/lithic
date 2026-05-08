@@ -198,6 +198,7 @@ Use this checklist in PR descriptions whenever lexer/parser/typechecker behavior
     - Captured in `docs/evaluator-small-step.md`.
   * [x] Validate evaluator behavior with focused fixtures/golden outputs.
     - Golden pipeline now renders `[Core]` and `[Val]` outputs, and evaluator unit coverage includes var/lit/lam/app/let/case/variant/record/select behaviors.
+    - Golden harness upgraded in Phase 9D to use `parseTopLevel` as its entry point, rendering `[Decl] <show decl>` for top-level declaration inputs alongside the existing expression pipeline outputs.
   * ~~Add a follow-up note on optional future lazy experimentation~~ — **Removed:** Lithic is strictly evaluated; lazy evaluation is not a planned direction.
 
 ### Formalization Checkpoint (Post-Phase 7)

@@ -95,8 +95,10 @@ The lexer recognizes the following core keywords/symbols used by the implemented
 - `-` (prefix unary minus and infix subtraction)
 
 Reserved (not currently implemented):
-- Function-equation clause heads (for example, `name pat1 pat2 = expr`).
+- Multi-clause function equations (for example, repeated `name pat = expr` clauses for the same name).
 - Guarded declaration bars (for example, `| guard => expr`).
+
+Note: single-clause equation-style declarations (`name p1 ... pn = expr`) are implemented in `parseTopLevel` as of Phase 9D.
 
 ### 2.3 Literals
 
@@ -531,7 +533,7 @@ Expected output contract for failures:
 Modules and touch points:
 1. New module: `src/Compiler/PatternMatch.hs`.
 2. Typechecker integration: `infer` path for `Case` in `src/Compiler/TypeChecker.hs`.
-3. Pipeline visibility: golden harness in `test/Main.hs` through existing REPL/type error formatting path.
+3. Pipeline visibility: golden harness in `test/Test/Golden.hs` via `parseTopLevel`. Declaration inputs render as `[Decl] <show decl>`; expression inputs continue through the existing type/core/eval formatting path.
 
 Companion docs to update in same implementation change:
 1. `README.md` examples/behavior bullets for exhaustiveness and unreachable branches.

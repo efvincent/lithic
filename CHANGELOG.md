@@ -1,5 +1,27 @@
 # Revision history for lithic
 
+## 0.9.5.0 -- 2026-05-08
+
+* Phase 9D: single-clause equation-style top-level declarations.
+	* Parser now accepts `f p1 ... pn = expr` at top level via `parseTopLevel`.
+	* Lowered by parser to a `DeclDef` whose RHS is nested lambdas over the equation parameters.
+	* `tryParseEquationDecl` helper added; single-clause path tested and goldens in place.
+* Phase 9B: signature-only top-level declaration parsing.
+	* `parseTopLevel` accepts `ident : Type` as a `DeclSig` declaration.
+	* Disambiguation rule: bare `ident : Type` at top level is reserved to signature declarations.
+* Phase 9B.2: same-name signature+equation pair parsing.
+	* `parseTopLevel` accepts `ident : Type` immediately followed by `ident = expr` (same name) and lowers to a single annotated `DeclDef`.
+* Phase 9A: initial top-level declaration infrastructure.
+	* Lexer keyword `def` added; `TokDef` routed through Pratt parser.
+	* `Decl` and `TopLevel` carrier types added to `Compiler.AST`.
+	* `parseTopLevel` entry point introduced alongside expression-oriented `runParser`.
+* Golden harness upgraded to use `parseTopLevel` as its pipeline entry point.
+	* Declaration fixtures render as `[Decl] <show decl>`; expression fixtures continue through type/core/eval path.
+	* Added golden fixtures for: `decl-signature`, `decl-signature-equation`, `decl-equation-single-clause`, `fail-multi-clause-decl`.
+* Fixed `mergeSpan` argument order for `Ann` span in signature+equation parser branch (was inverted, producing invalid spans).
+* Fixed typo in parse error message: "Expceted EOF after declaration" → "Expected EOF after declaration".
+* Removed unused `expectNotImplemented` helper from `test/Test/Evaluator.hs`.
+
 ## 0.9.4.0 -- 2026-05-07
 
 * Added a first-class documentation program goal in `docs/project-plan.md` targeting book-scale compiler documentation.
