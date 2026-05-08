@@ -159,18 +159,6 @@ expectValue expr expected =
     Left err ->
       assertFailure ("Expected successful evaluation, got error: " <> show err)
 
--- | Assert that a core expression currently lands on explicit
--- not-implemented evaluator boundary.
-expectNotImplemented :: CoreExpr -> Assertion
-expectNotImplemented expr =
-  case evalCore expr of
-    Left (EvalNotImplemented _ _) -> pure ()
-    Left err ->
-      assertFailure ("Expected EvalNotImplemented, got different error: " <> show err)
-    Right value ->
-      assertFailure
-        ("Expected EvalNotImplemented error, got successful value: " <> show value)
-
 -- | Lightweight assertion helper to keep test code readable.
 shouldBe :: (Eq a, Show a) => a -> a -> Assertion
 shouldBe actual expected
