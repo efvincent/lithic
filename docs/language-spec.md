@@ -116,10 +116,12 @@ Implementation model:
 - The parser treats `TokVirtSemi` as a branch/clause separator instead of inspecting raw token column positions.
 - The `clauseLayoutCol` field previously added to `ParserState` is removed; all layout reasoning lives in the preprocessing pass.
 
-Layout block triggers:
-- Top-level input: layout block opened at the column of the first token.
+Layout block triggers (current implementation):
 - After `of` keyword: layout block opened at the column of the first branch pattern.
-- After `where` keyword (planned): layout block opened at the column of the first binding.
+- After `let` keyword: conditionally opened when sibling-clause evidence is detected for grouped local `let`.
+
+Planned trigger (not yet implemented):
+- After `where` keyword: layout block opened at the column of the first binding.
 
 Decision (Phase 9E): `|` as an explicit case-branch prefix is retired. Previously branches were written `case e of | p1 => e1 | p2 => e2`. After the layout pass, branches are indented under `of` with no `|` prefix:
 ```
@@ -131,7 +133,7 @@ The `|` token is kept reserved to produce a clear error rather than silently mis
 
 This approach keeps the Pratt expression parser stateless with respect to indentation and makes `where` blocks straightforward to add in later phases.
 
-### 2.3 Literals
+### 2.6 Literals
 
 Supported literal token families:
 - Integer literals.
@@ -139,11 +141,11 @@ Supported literal token families:
 - String literals (single-line quoted).
 - Boolean literals (`True`, `False`).
 
-### 2.4 Comments
+### 2.7 Comments
 
 Line comments are supported with `--` through end-of-line.
 
-### 2.5 Source Location Contract
+### 2.8 Source Location Contract
 
 Every emitted token carries a `Span` and downstream parse/type diagnostics preserve source-location reporting.
 
