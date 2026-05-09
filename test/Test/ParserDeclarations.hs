@@ -69,6 +69,10 @@ parserDeclarationsUnitTests =
     , testCase "grouped local let without trailing in is rejected" $
       expectTopLevelFailure "let x = 1\n    y = 2"
 
+    , testCase "known limitation: single-clause let with multiline record RHS is misclassified as grouped let" $
+      expectTopLevelFailure
+        "let x =\n    {\n    y = 1,\n    z = 2\n    }\nin x.y"
+
     , testCase "top-level parse rejects token stream missing EOF" $
       expectTopLevelFailureWithoutEOF "let x = 1 in x"
     ]

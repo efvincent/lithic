@@ -1,12 +1,31 @@
 # Revision history for lithic
 
-## 0.9.6.0 -- 2026-05-08 (in progress)
+## 0.9.6.0 -- 2026-05-09 (Phase 9E Layout Complete)
 
 * Phase 9E: bounded layout preprocessing pass.
 	* Add `runLayout :: [Token] -> [Token]` pure pass between lexer and parser.
 	* Inserts `TokVirtSemi` (clause/statement separator) and `TokVirtRBrace` (block close) virtual tokens.
 	* Eliminates the `clauseLayoutCol` field and column-check hack in `peekPrecedence`.
 	* Unblocks multi-clause function equations and future `where` blocks.
+* Phase 9E (layout-delimited case branches): completed and tested.
+	* Case expressions now use `TokVirtSemi`-delimited branches with no `|` prefix.
+	* Parser migration from manual `|` consumption to virtual-token-driven branch parsing.
+	* All case-related golden fixtures updated and passing.
+* Phase 9E (layout-delimited grouped local let): completed and tested.
+	* Grouped local `let` clauses with single trailing `in` now supported.
+	* Lowered to ordered nested `Let` nodes with span preservation.
+	* Sibling-clause detection heuristic gates layout opening to avoid false positives.
+	* Comprehensive regression test coverage: basic grouped let, multiline first-clause RHS, multiline second-clause RHS, inner let in RHS, and explicit known-limitation case.
+	* Known limitation documented: multiline record-literal fields with `=` at clause-head indentation can be misclassified as sibling clauses; mitigation recommended for declaration-group/where-block work.
+* Documentation updates:
+	* Updated `docs/language-spec.md` to mark grouped local let as implemented.
+	* Added Phase 9E implementation notes in `docs/project-plan.md` covering the grouped-let layout hazard and mitigation strategy.
+	* Updated README with grouped local let example.
+	* Ensured all Phase 9E task status in roadmap reflects completion.
+* Test harness improvements:
+	* Added 4 new parser-unit regression tests for grouped let edge cases.
+	* Added 2 new golden fixtures and pass snapshots.
+	* Added 1 explicit known-limitation golden fixture documenting current parser boundary.
 
 ## 0.9.5.0 -- 2026-05-08
 

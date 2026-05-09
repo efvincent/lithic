@@ -101,7 +101,7 @@ Reserved (not currently implemented):
 
 Note: single-clause equation-style declarations (`name p1 ... pn = expr`) are implemented in `parseTopLevel` as of Phase 9D.
 
-### 2.5 Layout Rules (Phase 9E — In Progress)
+### 2.5 Layout Rules (Phase 9E — Complete)
 
 Lithic uses a bounded layout rule that is narrower than full Haskell off-side:
 
