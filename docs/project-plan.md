@@ -225,7 +225,8 @@ Status: Completed in 0.9.3.0 documentation milestone.
   * Phase 9B.2 adds same-name signature+equation pairing (`name : Type` followed by `name = expr`) in `parseTopLevel`.
   * Phase 9D adds single-clause equation-style top-level declaration parsing (`f p1 ... pn = expr`) lowered through parser-produced lambdas.
   * Phase 9E (implemented slice): adds a bounded layout preprocessing pass (`runLayout`) between the lexer and the parser. The current implementation powers layout-delimited `case` branches and grouped local `let` clauses, while declaration-group features remain follow-up work.
-  * Remaining work after 9E: multi-clause/guard grouping (9E cont.), Core/Elaborator declaration-group plumbing (9F), REPL environment persistence (9G).
+  * Phase 9F (in progress): multi-clause top-level function equations. Parser is extended to collect same-name same-arity clauses and lower them to a single `DeclDef` whose RHS is a lambda over a fresh argument variable with a `case` dispatch over the clause list. Single-argument multi-clause is the first supported arity; multi-argument follow in a later slice.
+  * Remaining work after 9F: multi-argument multi-clause (9F cont.), `where` block parsing (9G), Core/Elaborator declaration-group plumbing, REPL environment persistence.
 * **Tasks:**
   * [ ] Add syntax highlighting, stronger multi-line editing ergonomics, better history/navigation behavior, and tighter evaluator-aware feedback.
   * [x] Add parser support for initial top-level `def` declaration form (`def p = expr`) and top-level parse routing.
@@ -238,6 +239,8 @@ Status: Completed in 0.9.3.0 documentation milestone.
   * [x] Update `parseTopLevel` and `parseCase` to use `TokVirtSemi` as separator; remove parser-side branch-column tracking and stop consuming `|` tokens for case branches.
   * [x] Update all golden fixtures and test inputs that use `| pat => expr` syntax.
   * [ ] Add parser support for multi-clause function equations using virtual token separators.
+    * [~] Phase 9F first slice: single-argument multi-clause equations via `tryParseClauseTail` + `gatherAdditionalClauses` + `lowerEquationClauses`; single-clause path preserves existing `foldr mkLam` lowering to keep golden snapshots stable.
+    * [ ] Phase 9F follow-on: multi-argument multi-clause using record-pattern tuple scrutinee.
   * [ ] Add parser support for local function-equation syntax with shared-name clauses.
   * [x] Add parser support for grouped local `let` clauses with one trailing `in`, delimited by layout-inserted `TokVirtSemi` separators.
   * [ ] Add parser support for `where` blocks on declarations/equations using layout delimiters (`TokVirtSemi` / `TokVirtRBrace`) and scoped association to the owning declaration group.
