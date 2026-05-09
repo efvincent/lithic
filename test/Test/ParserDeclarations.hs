@@ -73,6 +73,11 @@ parserDeclarationsUnitTests =
       expectTopLevelFailure
         "let x =\n    {\n    y = 1,\n    z = 2\n    }\nin x.y"
 
+    , testCase "empty case branch list reports explicit diagnostic" $
+      expectTopLevelFailureMessage
+        "Case expression must have at least one branch"
+        "case x of"
+
     , testCase "top-level parse rejects token stream missing EOF" $
       expectTopLevelFailureWithoutEOF "let x = 1 in x"
     ]
@@ -89,6 +94,27 @@ expectTopLevelFailure src =
         Right tl ->
           assertFailure
             ("Expected parser to reject declaration form, but got top-level AST: " <> show tl)
+
+expectTopLevelFailureMessage :: T.Text -> T.Text -> Assertion
+expectTopLevelFailureMessage expectedMsg src =
+  case runLexer src of
+    Left lexErr ->
+      assertFailure
+        ("Lexer failed unexpectedly for parser-declaration baseline: " <> show lexErr)
+    Right toks ->
+      case parseTopLevel toks of
+        Left parseErr ->
+          let rendered = T.pack (show parseErr)
+          in if expectedMsg `T.isInfixOf` rendered
+            then pure ()
+            else assertFailure
+              ("Expected parser error to contain '"
+              <> T.unpack expectedMsg
+              <> "', but got: "
+              <> show parseErr)
+        Right tl ->
+          assertFailure
+            ("Expected parser failure, but got top-level AST: " <> show tl)
 
 expectTopLevelDeclSuccess :: T.Text -> Assertion
 expectTopLevelDeclSuccess src =

@@ -23,7 +23,7 @@
 	* Updated README with grouped local let example.
 	* Ensured all Phase 9E task status in roadmap reflects completion.
 * Test harness improvements:
-	* Added 5 parser-unit regression tests for grouped let behavior and the explicit known-limitation case.
+	* Added 6 parser-unit regression tests for grouped let behavior, empty-case diagnostic coverage, and the explicit known-limitation case.
 	* Added 5 new golden fixtures for grouped-let and known-limitation coverage.
 
 ## 0.9.5.0 -- 2026-05-08
