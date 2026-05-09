@@ -1,0 +1,7 @@
+-- Grouped local let where the first clause RHS contains an inner let.
+-- Regression target: inner let tokens in RHS must not corrupt outer grouping.
+
+let x =
+      let y = 1 in y
+    z = 2
+in z

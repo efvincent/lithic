@@ -55,6 +55,29 @@ parserDeclarationsUnitTests =
     , testCase "expression-only input still parses as top-level expression" $
         expectTopLevelExprSuccess "let x = 1 in x"
 
+    , testCase "grouped local let clauses with one trailing in parse as expression" $
+      expectTopLevelExprSuccess "let x = 1\n    y = 2\nin x"
+
+    , testCase "grouped local let allows multiline first-clause rhs" $
+      expectTopLevelExprSuccess
+        "let x =\n      case True of\n        True => 1\n        False => 0\n    y = 2\nin y"
+
+    , testCase "single-clause let with multiline rhs still parses" $
+      expectTopLevelExprSuccess
+        "let x =\n  case True of\n    True => 1\n    False => 0\nin x"
+
+    , testCase "grouped local let without trailing in is rejected" $
+      expectTopLevelFailure "let x = 1\n    y = 2"
+
+    , testCase "known limitation: single-clause let with multiline record RHS is misclassified as grouped let" $
+      expectTopLevelFailure
+        "let x =\n    {\n    y = 1,\n    z = 2\n    }\nin x.y"
+
+    , testCase "empty case branch list reports explicit diagnostic" $
+      expectTopLevelFailureMessage
+        "Case expression must have at least one branch"
+        "case x of"
+
     , testCase "top-level parse rejects token stream missing EOF" $
       expectTopLevelFailureWithoutEOF "let x = 1 in x"
     ]
@@ -71,6 +94,27 @@ expectTopLevelFailure src =
         Right tl ->
           assertFailure
             ("Expected parser to reject declaration form, but got top-level AST: " <> show tl)
+
+expectTopLevelFailureMessage :: T.Text -> T.Text -> Assertion
+expectTopLevelFailureMessage expectedMsg src =
+  case runLexer src of
+    Left lexErr ->
+      assertFailure
+        ("Lexer failed unexpectedly for parser-declaration baseline: " <> show lexErr)
+    Right toks ->
+      case parseTopLevel toks of
+        Left parseErr ->
+          let rendered = T.pack (show parseErr)
+          in if expectedMsg `T.isInfixOf` rendered
+            then pure ()
+            else assertFailure
+              ("Expected parser error to contain '"
+              <> T.unpack expectedMsg
+              <> "', but got: "
+              <> show parseErr)
+        Right tl ->
+          assertFailure
+            ("Expected parser failure, but got top-level AST: " <> show tl)
 
 expectTopLevelDeclSuccess :: T.Text -> Assertion
 expectTopLevelDeclSuccess src =

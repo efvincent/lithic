@@ -1,0 +1,9 @@
+-- Grouped local let where the first clause RHS spans multiple lines.
+-- Regression target: layout must still recognize the next sibling clause.
+
+let x =
+      case True of
+        True => 1
+        False => 0
+    y = 2
+in y

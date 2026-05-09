@@ -1,0 +1,4 @@
+[AST] Let [4,1]..[9,4] (PVar [4,5]..[4,5] "x") (Lit [4,9]..[4,9] (LInt 1)) (Let [5,5]..[9,4] (PVar [5,5]..[5,5] "y") (Case [6,7]..[8,18] (Lit [6,12]..[6,16] (LBool False)) [(PLit [7,9]..[7,12] (LBool True),Lit [7,17]..[7,17] (LInt 1)),(PLit [8,9]..[8,13] (LBool False),Lit [8,18]..[8,18] (LInt 2))]) (Var [9,4]..[9,4] "y"))
+[Type] TInt [7,17]..[7,17]
+[Core] CLet [4,1]..[9,4] (CPVar [4,5]..[4,5] "x") (CLit [4,9]..[4,9] (LInt 1)) (CLet [5,5]..[9,4] (CPVar [5,5]..[5,5] "y") (CCase [6,7]..[8,18] (CLit [6,12]..[6,16] (LBool False)) [(CPLit [7,9]..[7,12] (LBool True),CLit [7,17]..[7,17] (LInt 1)),(CPLit [8,9]..[8,13] (LBool False),CLit [8,18]..[8,18] (LInt 2))]) (CVar [9,4]..[9,4] "y"))
+[Val] VLit (LInt 2)

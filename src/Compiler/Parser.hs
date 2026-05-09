@@ -12,7 +12,7 @@ import Bluefin.State (State, get, put, runState)
 import Bluefin.Exception (Exception, throw, try)
 
 import Compiler.AST 
-import Compiler.Lexer (Token(..), TokenClass(..))
+import Compiler.Lexer (Token(..), TokenClass(..), runLayout)
 
 -- | Defines the binding power (precedence) of operators and expressions 
 -- during Pratt parsing. Higher values bind more tightly.
@@ -98,7 +98,7 @@ parseTopLevel :: [Token] -> Either ParseError TopLevel
 parseTopLevel toks =
   runPureEff $
     fmap fst $
-      runState (MkParserState toks) \st ->
+      runState (MkParserState $ runLayout toks) \st ->
       try \ex -> do
         eTok <- peek st
         case eTok of
@@ -513,43 +513,94 @@ parseNud tok st ex =
       pure $ Lam (mergeSpan tok.span (getSpan body)) pat mTy body
 
     TokLet -> do
-      pat <- parsePattern st ex
-      -- Check for optional type annotation
-      next <- peek st
-      mTy <- case next of
-        Just t | t.cls == TokColon -> do
+      firstClause <- parseLetClause tok.span
+      restClauses <- parseLetClauses []
+      mClose <- peek st
+      case mClose of
+        Just t | t.cls == TokVirtRBrace -> do
           _ <- advance st
-          ty <- parseType st ex
-          pure (Just ty)
-        _ -> pure Nothing
-      expect TokAssign st ex
-      val <- parseExpr (precVal PrecLowest) st ex
+          pure ()
+        _ -> pure ()
       expect TokIn st ex
       body <- parseExpr (precVal PrecLowest) st ex
-      -- Desugar the annotation onto the value expression
-      let finalVal = case mTy of
-            Just ty -> Ann (mergeSpan (getTypeSpan ty) (getSpan val)) val ty
-            Nothing -> val
-      pure $ Let (mergeSpan tok.span (getSpan body)) pat finalVal body
+      -- Consume the TokVirtRBrace that closeAll inserts for same-line `in`
+      -- (multiline `in` already consumed it before the expect above)
+      mLetClose <- peek st
+      case mLetClose of
+        Just t | t.cls == TokVirtRBrace -> do
+          _ <- advance st
+          pure ()
+        _ -> pure ()
+      let clauses = firstClause : restClauses
+      pure $ lowerLetClauses clauses body
+      where
+        parseLetClause startSp = do
+          pat <- parsePattern st ex
+          next <- peek st
+          mTy <- case next of
+            Just t | t.cls == TokColon -> do
+              _ <- advance st
+              ty <- parseType st ex
+              pure (Just ty)
+            _ -> pure Nothing
+          expect TokAssign st ex
+          val <- parseExpr (precVal PrecLowest) st ex
+          let finalVal = case mTy of
+                Just ty -> Ann (mergeSpan (getTypeSpan ty) (getSpan val)) val ty
+                Nothing -> val
+              clauseSpan = mergeSpan startSp (getSpan finalVal)
+          pure (pat, finalVal, clauseSpan)
+        
+        parseLetClauses acc = do
+          mSep <- peek st
+          case mSep of
+            Just t | t.cls == TokVirtSemi -> do
+              _ <- advance st
+              clause <- parseLetClause t.span
+              parseLetClauses (clause : acc)
+            _ -> pure (reverse acc)
+
+        lowerLetClauses clauses body =
+          foldr mkLet body clauses
+
+        mkLet (pat, rhs, clauseSpan) acc =
+          Let (mergeSpan clauseSpan (getSpan acc)) pat rhs acc
       
     TokCase -> do
       scrutinee <- parseExpr (precVal PrecLowest) st ex
       expect TokOf st ex
-      -- Recursively parse `| pattern => Expression`
-      let parseBranches branches = do
-            next <- peek st
-            case next of
-              Just t | t.cls == TokPipe -> do
-                _ <- advance st -- Consume `|`
-                pat <- parsePattern st ex
-                expect TokFatArrow st ex 
-                body <- parseExpr (precVal PrecLowest) st ex
-                parseBranches (branches ++ [(pat, body)])
-              _ -> pure branches
-      branches <- parseBranches []
-      if null branches
-      then throw ex $ MkParseError "Case expression must have at least one branch" tok.span
-      else pure $ Case (mergeSpan tok.span (getSpan (snd (last branches)))) scrutinee branches
+      mFirst <- peek st
+      case mFirst of
+        Just t | t.cls == TokVirtRBrace || t.cls == TokEOF ->
+          throw ex $ MkParseError "Case expression must have at least one branch" t.span
+        Nothing -> 
+          throw ex $ MkParseError "Case expression must have at least one branch" tok.span
+        _ -> pure ()
+      firstBranch <- parseCaseBranch
+      restBranches <- parseCaseBranches []
+      mClose <- peek st
+      case mClose of
+        Just t | t.cls == TokVirtRBrace -> do
+          _ <- advance st
+          pure ()
+        _ -> pure ()
+      let branches = firstBranch : restBranches
+      pure $ Case (mergeSpan tok.span (getSpan . snd . last $ branches)) scrutinee branches
+      where
+        parseCaseBranch = do
+          pat <- parsePattern st ex
+          expect TokFatArrow st ex
+          body <-parseExpr (precVal PrecLowest) st ex
+          pure (pat,body)
+
+        parseCaseBranches acc = do
+          mSep <- peek st
+          case mSep of
+            Just t | t.cls == TokVirtSemi -> do
+              _ <- advance st
+              branch <- parseCaseBranch
+              parseCaseBranches (branch : acc)
+            _ -> pure . reverse $ acc
 
     TokUIdent x -> do
       -- We parse the payload expression at Application precedence
@@ -649,7 +700,7 @@ runParser :: [Token] -> Either ParseError Expr
 runParser toks = 
   runPureEff $
     fmap fst $
-      runState (MkParserState toks) \st ->
+      runState (MkParserState $ runLayout toks) \st ->
         try \ex -> do
           expr <- parseExpr (precVal PrecLowest) st ex
           -- Ensure the entire token stream was consumed

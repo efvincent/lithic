@@ -89,7 +89,8 @@ The lexer recognizes the following core keywords/symbols used by the implemented
 - `:` (type annotation)
 - `=` (binding/field assignment)
 - `.` (selection/path separator)
-- `{`, `}`, `(`, `)`, `,`, `|`
+- `{`, `}`, `(`, `)`, `,`
+- `|` — retired from case-branch syntax as of Phase 9E (layout pass); previously used as explicit branch separator. Kept as a reserved token to avoid silently misparsing legacy input.
 - `:=` (lens set)
 - `%=` (lens modify)
 - `-` (prefix unary minus and infix subtraction)
@@ -100,7 +101,39 @@ Reserved (not currently implemented):
 
 Note: single-clause equation-style declarations (`name p1 ... pn = expr`) are implemented in `parseTopLevel` as of Phase 9D.
 
-### 2.3 Literals
+### 2.5 Layout Rules (Phase 9E — Complete)
+
+Lithic uses a bounded layout rule that is narrower than full Haskell off-side:
+
+- Top-level declaration clause grouping, `case` branch sequences, and `where` block bodies (planned) are layout-sensitive.
+- All other block delimiters are explicit: `in` for let-bindings, `=>` for lambdas and case branch RHS, `of` opens a case layout block.
+
+Implementation model:
+- A pure `runLayout :: [Token] -> [Token]` preprocessing pass runs between the lexer and the parser.
+- This pass inserts two virtual token classes:
+  - `TokVirtSemi` — separates same-indent branches, clauses, or statements at the active layout column.
+  - `TokVirtRBrace` — closes a layout block when indentation decreases below the block column.
+- The parser treats `TokVirtSemi` as a branch/clause separator instead of inspecting raw token column positions.
+- The `clauseLayoutCol` field previously added to `ParserState` is removed; all layout reasoning lives in the preprocessing pass.
+
+Layout block triggers (current implementation):
+- After `of` keyword: layout block opened at the column of the first branch pattern.
+- After `let` keyword: conditionally opened when sibling-clause evidence is detected for grouped local `let`.
+
+Planned trigger (not yet implemented):
+- After `where` keyword: layout block opened at the column of the first binding.
+
+Decision (Phase 9E): `|` as an explicit case-branch prefix is retired. Previously branches were written `case e of | p1 => e1 | p2 => e2`. After the layout pass, branches are indented under `of` with no `|` prefix:
+```
+case e of
+  p1 => e1
+  p2 => e2
+```
+The `|` token is kept reserved to produce a clear error rather than silently misparsing old input.
+
+This approach keeps the Pratt expression parser stateless with respect to indentation and makes `where` blocks straightforward to add in later phases.
+
+### 2.6 Literals
 
 Supported literal token families:
 - Integer literals.
@@ -108,11 +141,11 @@ Supported literal token families:
 - String literals (single-line quoted).
 - Boolean literals (`True`, `False`).
 
-### 2.4 Comments
+### 2.7 Comments
 
 Line comments are supported with `--` through end-of-line.
 
-### 2.5 Source Location Contract
+### 2.8 Source Location Contract
 
 Every emitted token carries a `Span` and downstream parse/type diagnostics preserve source-location reporting.
 
@@ -129,9 +162,12 @@ Expr ::= LetExpr
        | AnnExpr
 
 LetExpr ::= "let" Pattern [":" Type] "=" Expr "in" Expr
+          | "let" LetClause+ "in" Expr      // implemented: layout-delimited grouped clauses
 LamExpr ::= "\\" Pattern [":" Type] "=>" Expr
 CaseExpr ::= "case" Expr "of" Branch+
-Branch ::= "|" Pattern "=>" Expr
+Branch ::= Pattern "=>" Expr        -- layout-delimited; TokVirtSemi separates branches
+
+LetClause ::= Pattern [":" Type] "=" Expr
 
 AnnExpr ::= SubExpr [":" Type]
 
@@ -165,15 +201,17 @@ Notes:
 1. `UIdent Expr` payloads are currently required; nullary constructors are represented with an explicit empty-record payload (for example, `None {}`).
 2. Record labels in row-like forms may be lowercase or uppercase at parser level.
 3. `fn` and `\\` both tokenize to `TokLam` and are accepted as lambda introducers.
+4. Grouped local `let` clauses with one trailing `in` are implemented under layout delimiters and lower to ordered nested `Let` nodes.
 
 ### 3.4 Declaration Forms (Provisional)
 
 Current parser entrypoint status:
 1. `runParser` remains expression-oriented.
 2. `parseTopLevel` supports minimal declaration forms: `def Pattern = Expr`, `ident : Type`, same-name signature+equation pairing (`ident : Type` followed by `ident = Expr`), and single-clause equation forms (`f p1 ... pn = expr`).
-3. Declaration groups, guarded clauses, and multi-clause function equations remain reserved roadmap syntax.
-4. Disambiguation rule at top level: bare `ident : Type` is interpreted as a signature declaration.
-5. In this slice, `parseTopLevel` does not provide an expression-annotation escape hatch for this shape; `ident`-headed annotation forms at top level are reserved to declaration parsing.
+3. Multi-clause function equations and guarded clauses remain reserved pending declaration-group support.
+4. The layout pass is in place and currently powers `case` branch separators and grouped local `let` clauses.
+5. Disambiguation rule at top level: bare `ident : Type` is interpreted as a signature declaration.
+6. In this slice, `parseTopLevel` does not provide an expression-annotation escape hatch for this shape; `ident`-headed annotation forms at top level are reserved to declaration parsing.
 
 Status table for planned declaration forms:
 
@@ -184,6 +222,7 @@ Status table for planned declaration forms:
 | Same-name signature+equation pair | `ident : Type` then `ident = expr` | Implemented (parseTopLevel only) | Lowered in parser to a definition with an annotated RHS; full declaration grouping remains unimplemented. |
 | Function equation (single clause) | `f p1 ... pn = expr` | Implemented (parseTopLevel only) | Lowered by parser to a declaration whose RHS is nested lambdas over equation patterns. |
 | Function equation (multi clause) | repeated `f ... = ...` clauses | Not implemented yet | Clauses will be grouped by function name into one declaration unit. |
+| Grouped local let clauses | `let` then layout-delimited clause list, single trailing `in` | Implemented | Lowered to ordered nested `Let` nodes with span preservation. |
 | Guarded clause | `f p1 ... pn` then `| guard => expr` lines | Not implemented yet | Guard RHS uses fat arrow to remain consistent with term-level branch delimiters. |
 | Pattern-headed clause | `f <pattern> ... = expr` | Not implemented yet | Will lower through the same match-analysis pipeline as `case`. |
 
