@@ -5,8 +5,8 @@
 
 let f : Variant { Ok : String, Err : {} | a } -> String = \res =>
   case res of
-    | Ok "success" => "matched success"
-    | Ok _         => "matched ok wildcard"
-    | Err _        => "matched err wildcard"
-    | _            => "matched fallback"
+    Ok "success" => "matched success"
+    Ok _         => "matched ok wildcard"
+    Err _        => "matched err wildcard"
+    _            => "matched fallback"
 in f (Ok "success")

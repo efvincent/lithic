@@ -50,7 +50,7 @@ e ::= x
     | \p => e
     | e e
     | let p = e in e
-    | case e of | p => e | ...
+   | case e of p => e ; ...
     | Variant L e
     | { l1 = e1, ..., ln = en }
     | e.f
@@ -85,7 +85,7 @@ ce ::= cvar x
      | clam p ce
      | capp ce ce
      | clet p ce ce
-     | ccase ce of | p => ce | ...
+   | ccase ce of p => ce ; ...
      | cvariant L ce
      | crec { l1 = ce1, ..., ln = cen }
      | cselect ce l

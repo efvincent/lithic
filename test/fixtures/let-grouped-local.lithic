@@ -1,0 +1,6 @@
+-- Grouped local let clauses with one trailing `in` (layout-delimited).
+-- Parser target: should eventually lower to nested Let nodes.
+
+let x = 1
+    y = 2
+in x

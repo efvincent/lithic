@@ -55,6 +55,20 @@ parserDeclarationsUnitTests =
     , testCase "expression-only input still parses as top-level expression" $
         expectTopLevelExprSuccess "let x = 1 in x"
 
+    , testCase "grouped local let clauses with one trailing in parse as expression" $
+      expectTopLevelExprSuccess "let x = 1\n    y = 2\nin x"
+
+    , testCase "grouped local let allows multiline first-clause rhs" $
+      expectTopLevelExprSuccess
+        "let x =\n      case True of\n        True => 1\n        False => 0\n    y = 2\nin y"
+
+    , testCase "single-clause let with multiline rhs still parses" $
+      expectTopLevelExprSuccess
+        "let x =\n  case True of\n    True => 1\n    False => 0\nin x"
+
+    , testCase "grouped local let without trailing in is rejected" $
+      expectTopLevelFailure "let x = 1\n    y = 2"
+
     , testCase "top-level parse rejects token stream missing EOF" $
       expectTopLevelFailureWithoutEOF "let x = 1 in x"
     ]

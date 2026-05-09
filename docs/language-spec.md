@@ -160,9 +160,12 @@ Expr ::= LetExpr
        | AnnExpr
 
 LetExpr ::= "let" Pattern [":" Type] "=" Expr "in" Expr
+          | "let" LetClause+ "in" Expr      // implemented: layout-delimited grouped clauses
 LamExpr ::= "\\" Pattern [":" Type] "=>" Expr
 CaseExpr ::= "case" Expr "of" Branch+
 Branch ::= Pattern "=>" Expr        -- layout-delimited; TokVirtSemi separates branches
+
+LetClause ::= Pattern [":" Type] "=" Expr
 
 AnnExpr ::= SubExpr [":" Type]
 
@@ -196,16 +199,17 @@ Notes:
 1. `UIdent Expr` payloads are currently required; nullary constructors are represented with an explicit empty-record payload (for example, `None {}`).
 2. Record labels in row-like forms may be lowercase or uppercase at parser level.
 3. `fn` and `\\` both tokenize to `TokLam` and are accepted as lambda introducers.
+4. Grouped local `let` clauses with one trailing `in` are implemented under layout delimiters and lower to ordered nested `Let` nodes.
 
 ### 3.4 Declaration Forms (Provisional)
 
 Current parser entrypoint status:
 1. `runParser` remains expression-oriented.
 2. `parseTopLevel` supports minimal declaration forms: `def Pattern = Expr`, `ident : Type`, same-name signature+equation pairing (`ident : Type` followed by `ident = Expr`), and single-clause equation forms (`f p1 ... pn = expr`).
-3. Multi-clause function equations and guarded clauses are reserved pending the layout pass (Phase 9E).
-4. Once the layout pass is in place, `parseTopLevel` will accept same-name clause sequences separated by `TokVirtSemi` tokens.
-4. Disambiguation rule at top level: bare `ident : Type` is interpreted as a signature declaration.
-5. In this slice, `parseTopLevel` does not provide an expression-annotation escape hatch for this shape; `ident`-headed annotation forms at top level are reserved to declaration parsing.
+3. Multi-clause function equations and guarded clauses remain reserved pending declaration-group support.
+4. The layout pass is in place and currently powers `case` branch separators and grouped local `let` clauses.
+5. Disambiguation rule at top level: bare `ident : Type` is interpreted as a signature declaration.
+6. In this slice, `parseTopLevel` does not provide an expression-annotation escape hatch for this shape; `ident`-headed annotation forms at top level are reserved to declaration parsing.
 
 Status table for planned declaration forms:
 
@@ -216,6 +220,7 @@ Status table for planned declaration forms:
 | Same-name signature+equation pair | `ident : Type` then `ident = expr` | Implemented (parseTopLevel only) | Lowered in parser to a definition with an annotated RHS; full declaration grouping remains unimplemented. |
 | Function equation (single clause) | `f p1 ... pn = expr` | Implemented (parseTopLevel only) | Lowered by parser to a declaration whose RHS is nested lambdas over equation patterns. |
 | Function equation (multi clause) | repeated `f ... = ...` clauses | Not implemented yet | Clauses will be grouped by function name into one declaration unit. |
+| Grouped local let clauses | `let` then layout-delimited clause list, single trailing `in` | Implemented | Lowered to ordered nested `Let` nodes with span preservation. |
 | Guarded clause | `f p1 ... pn` then `| guard => expr` lines | Not implemented yet | Guard RHS uses fat arrow to remain consistent with term-level branch delimiters. |
 | Pattern-headed clause | `f <pattern> ... = expr` | Not implemented yet | Will lower through the same match-analysis pipeline as `case`. |
 

@@ -45,6 +45,8 @@ data TokenClass
   | TokCase         -- ^ The `case` keyword
   | TokOf           -- ^ The `of` keyword
   | TokWildcard     -- ^ The `_` wildcard pattern
+  | TokVirtSemi     -- ^ Virtual separator inserted by layout pass
+  | TokVirtRBrace   -- ^ Virtual block close inserted by layout pass
   | TokEOF
   deriving (Show, Eq, Generic)
 
@@ -268,3 +270,113 @@ runLexer input =
       runState (MkScannerState input 1 1) \st ->
         try $ \ex -> 
           scanTokens st ex
+
+-- | Pure bounded layout preprocessing pass.
+-- 
+-- Inserts virtual separators and block-close tokens for indentation-delimited
+-- case branches and grouped let clauses. Layout blocks are opened after
+-- `TokOf` (case) and `TokLet` (grouped let).
+runLayout' :: [Token] -> [Token]
+runLayout' = go False [] Nothing
+  where
+    go pending layoutCols prevLine toks =
+      case toks of
+        [] -> []
+        (tok:rest) ->
+          case tok.cls of
+            TokEOF -> closeAll tok.span layoutCols ++ [tok]
+            _ ->
+              let lineNow = spanStartLine tok.span
+                  colNow = spanStartCol tok.span
+                  (layoutCols1, virtuals) =
+                    if isNewLine prevLine lineNow
+                    then applyLineBreak tok.span colNow layoutCols
+                    else (layoutCols, [])
+                  layoutCols2 =
+                    if pending
+                    then colNow : layoutCols1
+                    else layoutCols1
+                  pending' = tok.cls == TokOf || tok.cls == TokLet
+              in
+              virtuals ++ [tok] ++ go pending' layoutCols2 (Just lineNow) rest
+    
+    isNewLine Nothing _ = False
+    isNewLine (Just prev) cur = prev /= cur
+
+    applyLineBreak sp col cols = closeDedent sp col cols []
+
+    closeDedent sp col cols acc =
+      case cols of
+        top:rest | col < top ->
+          closeDedent sp col rest (acc ++ [MkToken TokVirtRBrace sp])
+        top:_ | col == top ->
+          (cols, acc ++ [MkToken TokVirtSemi sp])
+        _ -> 
+          (cols, acc)
+
+    closeAll sp cols = map (\_ -> MkToken TokVirtRBrace sp) cols
+
+    spanStartLine (MkSpan sl _ _ _ ) = sl
+    spanStartCol  (MkSpan _ sc _ _ ) = sc
+
+-- | Pure bounded layout preprocessing pass.
+-- Inserts 'TokVirtSemi' (same-indent separator) and 'TokVirtRBrace' (block close)
+-- virtual tokens. Layout blocks are opened after 'TokOf' (case branches) and
+-- 'TokLet' (grouped let clauses).
+runLayout :: [Token] -> [Token]
+runLayout = go False [] Nothing
+  where
+    go _ _ _ []       = []
+    go pending cols prevLine (tok:rest)
+      | tok.cls == TokEOF =
+          map (\_ -> MkToken TokVirtRBrace tok.span) cols ++ [tok]
+      | otherwise =
+          let curLine  = tok.span.startLine
+              curCol   = tok.span.startCol
+              newLine  = maybe False (/= curLine) prevLine
+              (cols1, virtuals)
+                | newLine   = dedent tok.span curCol cols []
+                | otherwise = (cols, [])
+              cols2
+                | pending   = curCol : cols1
+                | otherwise = cols1
+              nextPending
+                | tok.cls == TokOf  = True
+                | tok.cls == TokLet = shouldOpenLetLayout curLine rest
+                | otherwise         = False
+          in virtuals ++ [tok] ++ go nextPending cols2 (Just curLine) rest
+
+    shouldOpenLetLayout :: Int -> [Token] -> Bool
+    shouldOpenLetLayout _ [] = False
+    shouldOpenLetLayout _ (firstTok:rest)
+      | firstTok.cls == TokEOF = False
+      | otherwise =
+          let headLine = firstTok.span.startLine
+              headCol  = firstTok.span.startCol
+          in findSibling headLine headCol headLine rest
+      where
+        findSibling _ _ _ [] = False
+        findSibling headLine headCol prevLine (t:ts)
+          | t.cls == TokEOF = False
+          | t.cls == TokIn && t.span.startLine == headLine = False
+          | t.cls == TokIn && t.span.startCol <= headCol = False
+          | isFirstOnLine
+            && t.span.startLine > headLine
+            && t.span.startCol == headCol
+            && lineHasAssign t.span.startLine (t:ts) = True
+          | otherwise = findSibling headLine headCol t.span.startLine ts
+          where
+            isFirstOnLine = t.span.startLine /= prevLine
+
+        lineHasAssign _ [] = False
+        lineHasAssign ln (t:ts)
+          | t.cls == TokEOF = False
+          | t.span.startLine /= ln = False
+          | t.cls == TokAssign = True
+          | otherwise = lineHasAssign ln ts
+    
+    dedent _  _   []         acc = ([], acc)
+    dedent sp col (top:rest) acc
+      | col < top  = dedent sp col rest (acc ++ [MkToken TokVirtRBrace sp])
+      | col == top = (top : rest, acc ++ [MkToken TokVirtSemi sp])
+      | otherwise  = (top : rest, acc)

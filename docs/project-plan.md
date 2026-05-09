@@ -41,7 +41,7 @@ These decisions are locked in and should guide all future implementation phases:
   * **Unified Lenses:** Both modes share the same native lens syntax (`record.{ x := 1 }`) and AST node (`RecUpdate`). The current checker fully supports structural mode and keeps nominal mode as planned follow-up work.
 * **Universal Pattern Matching (Destructuring & Exhaustiveness):** Binding sites across the language (`let`, function parameters, `case`) support deep destructuring of Algebraic Data Types, records, and lists. The compiler includes a dedicated Pattern Compilation phase to enforce strict **exhaustiveness and reachability checking**. Unhandled cases (e.g., matching a list of length 3 but omitting the empty or arbitrary-length cases) or unreachable redundant patterns will result in hard compile-time errors, ensuring absolute structural safety before C-generation.
 * **Effect System (Lexical Capability Passing):** Lithic avoids the heavy runtime overhead and CPS-transformations of true algebraic continuations. Instead, it utilizes a Bluefin-style capability-passing model. Effects are tracked in the type system via row polymorphism (e.g., `Int -> { io, net } Int`) and compiled to standard C as implicit dictionary pointers. This guarantees native C stack performance and trivial FFI integration while maintaining pure functional control flow.
-* **Pattern Guards:** Planned guard handling uses ordered guard evaluation with explicit fall-through semantics (`| guard => expr`) and lowers through the decision-tree/match compilation pipeline.
+* **Pattern Guards:** Planned guard handling keeps explicit `|` guard lines (Haskell-style) with ordered fall-through semantics (`| guard => expr`) and lowers through the decision-tree/match compilation pipeline.
 * **Function Equations (Planned Surface Form):** Lithic will support grouped multi-clause function equations with optional guards and pattern-headed arguments; elaboration will lower these declarations to a unified lambda-plus-match internal representation.
 
 ### Design Decision: Variant Payloads
@@ -218,12 +218,13 @@ Status: Completed in 0.9.3.0 documentation milestone.
   * Elaboration must handle declaration groups: mutually recursive definitions within a group, ordering constraints, and separate Core lowering for declaration forms vs. expression forms.
   * Top-level bindings must thread through the evaluator and REPL: the REPL should accumulate a top-level environment across inputs rather than resetting per expression.
   * Type signatures at declaration scope (e.g., `f : a -> a`) are a parallel addition; initial implementation may defer to inferred types.
+  * Layout preprocessing also enables grouped local `let` clauses with a single trailing `in` (for example: `let a = ...; b = ... in body` via virtual separators). This should lower to ordered nested `Let` nodes while preserving source spans.
 * **Status (May 2026):**
   * Phase 9A parser foundation is in place: lexer keyword support for `def`, top-level AST carrier types, `parseTopLevel`, and parser declaration baseline tests (including a passing `def x = 1` case).
   * Phase 9B adds signature-only top-level parsing (`name : Type`) in `parseTopLevel` with test coverage.
   * Phase 9B.2 adds same-name signature+equation pairing (`name : Type` followed by `name = expr`) in `parseTopLevel`.
   * Phase 9D adds single-clause equation-style top-level declaration parsing (`f p1 ... pn = expr`) lowered through parser-produced lambdas.
-  * Phase 9E (in progress): adds a bounded layout preprocessing pass (`runLayout`) between the lexer and the parser. Multi-clause equation grouping requires this pass to avoid ambiguity between continuation syntax and clause heads; it also directly unblocks `where` clauses and any future block-structured syntax.
+  * Phase 9E (implemented slice): adds a bounded layout preprocessing pass (`runLayout`) between the lexer and the parser. The current implementation powers layout-delimited `case` branches and grouped local `let` clauses, while declaration-group features remain follow-up work.
   * Remaining work after 9E: multi-clause/guard grouping (9E cont.), Core/Elaborator declaration-group plumbing (9F), REPL environment persistence (9G).
 * **Tasks:**
   * [ ] Add syntax highlighting, stronger multi-line editing ergonomics, better history/navigation behavior, and tighter evaluator-aware feedback.
@@ -233,11 +234,14 @@ Status: Completed in 0.9.3.0 documentation milestone.
   * [x] Add parser support for single-clause equation-style declarations (`f p1 ... pn = expr`) lowered to declaration-level lambda form.
   * [x] Decision (Phase 9E): introduce bounded layout-rule preprocessing pass before implementing multi-clause grouping. Rationale: multi-clause parsing requires distinguishing clause heads from Pratt application continuations; a column-check hack inside `peekPrecedence` was evaluated and rejected in favour of a proper `runLayout :: [Token] -> [Token]` pass that inserts virtual `TokVirtSemi` and `TokVirtRBrace` tokens. This keeps the expression parser stateless w.r.t. indentation and unblocks `where` blocks at no additional cost.
   * [x] Decision (Phase 9E): retire `|` as explicit case-branch prefix. Branches will be layout-delimited under `of`; `TokVirtSemi` separates them. `|` is kept reserved to error clearly on old input.
-  * [ ] Implement `runLayout` preprocessing pass (Phase 9E): insert `TokVirtSemi` / `TokVirtRBrace` virtual tokens; wire between `runLexer` and `parseTopLevel`. Layout blocks triggered at: top-level input start, after `of` keyword, after `where` keyword (planned).
-  * [ ] Update `parseTopLevel` and `parseCase` to use `TokVirtSemi` as separator; remove `clauseLayoutCol` from `ParserState`; stop emitting/consuming `|` tokens for case branches.
-  * [ ] Update all golden fixtures and test inputs that use `| pat => expr` syntax.
+  * [x] Implement `runLayout` preprocessing pass (Phase 9E): insert `TokVirtSemi` / `TokVirtRBrace` virtual tokens; wire between `runLexer` and `parseTopLevel`/`runParser`. Current layout triggers are after `of` and `let`.
+  * [x] Update `parseTopLevel` and `parseCase` to use `TokVirtSemi` as separator; remove parser-side branch-column tracking and stop consuming `|` tokens for case branches.
+  * [x] Update all golden fixtures and test inputs that use `| pat => expr` syntax.
   * [ ] Add parser support for multi-clause function equations using virtual token separators.
   * [ ] Add parser support for local function-equation syntax with shared-name clauses.
+  * [x] Add parser support for grouped local `let` clauses with one trailing `in`, delimited by layout-inserted `TokVirtSemi` separators.
+  * [ ] Add parser support for `where` blocks on declarations/equations using layout delimiters (`TokVirtSemi` / `TokVirtRBrace`) and scoped association to the owning declaration group.
+  * [ ] Define and implement lowering for declaration/equation `where` blocks to internal local-binding structure with source-span preservation.
   * [ ] Add guard syntax on function equations (Haskell-style guard lists) and lower to decision trees.
   * [ ] Add pattern-headed function equations and desugar to `case` while preserving source spans.
   * [ ] Extend the REPL evaluator loop to maintain a persistent top-level environment across submissions.
@@ -247,6 +251,21 @@ Status: Completed in 0.9.3.0 documentation milestone.
     * [ ] Support scientific notation (e.g., `1e-5`).
     * [ ] Support multi-line strings.
     * [ ] Support Character literals (e.g., `'a'`).
+
+  #### Phase 9E Implementation Note: Grouped Local `let` Layout Pitfalls
+
+  Grouped local `let` support surfaced a subtle layout hazard around same-line clause heads (`let x = ...`). The initial rule opened a let-layout block after every `TokLet`, which over-opened in single-clause forms and caused spurious `TokVirtRBrace` insertions inside multiline RHS expressions.
+
+  Observed failure mode:
+  * Inputs such as `let f = \r => ... in ...` or `let x =` followed by multiline RHS were incorrectly interpreted as beginning a grouped-clause block, producing `TokVirtRBrace` where expression tokens were expected.
+
+  Mitigation now implemented:
+  * `TokLet` layout opening is gated by sibling-clause detection rather than unconditional opening.
+  * The detector requires evidence of a later same-indentation clause head with an assignment, and ignores non-head tokens on continuation lines.
+  * Dedicated regression coverage now includes grouped local let, multiline first-clause RHS with a sibling clause, and multiline single-clause let forms.
+
+  Follow-up caution:
+  * Reuse the same gating approach when extending layout to declaration groups and `where` blocks to avoid repeating the over-open/early-close token regression.
 
 ### 📅 Phase 9.5: List / Sequence Type & `::` Cons Syntax
 * **Objective:** Introduce a built-in list/sequence type with `::` as the cons operator at both expression and pattern level.
@@ -356,12 +375,22 @@ Design constraints for implementation:
 
 ### 📅 Phase 16: Tooling Ecosystem (LSP & Debugger)
 * **Objective:** Elevate Lithic to a production-ready language with a first-class VSCode developer experience.
+* **Incremental Compilation Strategy (LSP-critical):**
+  * LSP features require error-tolerant whole-program semantic analysis, not fail-fast compilation.
+  * Do not run full backend code generation on each edit; run frontend + semantic phases incrementally and reuse cached artifacts.
+  * Preserve partial artifacts under diagnostics so hover/definition/references continue working in unaffected regions.
 * **Tasks:**
   * [ ] Build a Language Server Protocol (LSP) server implementation, leveraging the `Span` tracking carried through all compiler phases for precise hover/go-to-definition/diagnostics.
   * [ ] Implement the LSP `textDocument/diagnostic` push model so type errors appear inline in VSCode without requiring a manual build step.
   * [ ] Implement hover (`textDocument/hover`) to surface inferred types and kind information at the cursor position.
   * [ ] Implement go-to-definition and find-references for top-level and local bindings.
   * [ ] Implement semantic syntax highlighting via LSP `textDocument/semanticTokens`.
+  * [ ] Introduce diagnostic accumulation sinks in parser/typechecker/elaborator paths so multiple deterministic diagnostics are emitted per edit when practical.
+  * [ ] Add parser recovery nodes/spans for malformed regions so analysis can continue beyond local syntax failures.
+  * [ ] Add an incremental dependency graph and invalidation strategy (changed module plus transitive dependents only).
+  * [ ] Cache per-module frontend/semantic artifacts (tokens/layout, surface AST, typed interface summary, and elaborated/core snapshot where available) keyed by content hash.
+  * [ ] Define cache coherence contracts: when signatures/type environments change, invalidate dependent typed artifacts while preserving unaffected modules.
+  * [ ] Add LSP-focused performance regression fixtures (cold open, warm edit, cross-file rename, and diagnostic fan-out scenarios).
   * [ ] Introduce debugger adapter protocol (DAP) support to enable VSCode breakpoint, step, and watch variable features:
     * The evaluator must carry a structured execution trace (small-step transition log) that the DAP adapter can expose as step events.
     * Breakpoints map to `Span`-tagged Core nodes; the evaluator checks the active breakpoint set before each reduction step.

@@ -2,4 +2,4 @@
 
 let _id = \_x => _x in
 case True of
-  | _ => _id 1
+  _ => _id 1

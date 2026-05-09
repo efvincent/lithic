@@ -25,9 +25,20 @@ Golden cases are discovered from `test/fixtures/*.lithic` and compared against m
 In the REPL:
 
 - Enter an expression such as `42`, `\x => x`, `\x : Int => x`, or `let id = \x => x in id 5`.
+- Grouped local `let` clauses are supported with a single trailing `in`, for example:
+  ```haskell
+  let x = 1
+      y = 2
+  in x
+  ```
 - Record expressions and selections are supported, for example `{ x = 1, y = 2 }` and `r.x`.
 - Lens-style updates are supported with `:=` (set) and `%=` (modify), for example `state.{ player.hp := 99 }` and `state.{ score %= \s => s }`.
-- Case expressions are supported, for example `case v of | Ok x => x | Err _ => 0`.
+- Case expressions are supported, for example:
+  ```haskell
+  case v of
+    Ok x => x
+    Err _ => 0
+  ```
 - Primitive literals currently include `Int`, `Float`, `String`, and `Bool` (`True`/`False`).
 - Prefix unary minus and infix subtraction are supported (`-x`, `x - y`).
 - Function-equation syntax with guards and pattern-headed clauses is planned but not yet implemented.
