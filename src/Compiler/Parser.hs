@@ -557,8 +557,8 @@ parseNud tok st ex =
             Just t | t.cls == TokVirtSemi -> do
               _ <- advance st
               clause <- parseLetClause t.span
-              parseLetClauses (clause : acc)
-            _ -> pure (reverse acc)
+              parseLetClauses (acc ++ [clause])
+            _ -> pure acc
 
         lowerLetClauses clauses body =
           foldr mkLet body clauses
@@ -573,10 +573,6 @@ parseNud tok st ex =
       case mFirst of
         Just t | t.cls == TokVirtRBrace ->
           throw ex $ MkParseError "Case expression must have at least one branch" t.span
-        Just t | t.cls == TokEOF ->
-          throw ex $ MkParseError "Case expression must have at least one branch" t.span
-        Nothing ->
-          throw ex $ MkParseError "Case expression must have at least one branch" tok.span
         _ -> pure ()
       firstBranch <- parseCaseBranch
       restBranches <- parseCaseBranches []
@@ -601,8 +597,8 @@ parseNud tok st ex =
             Just t | t.cls == TokVirtSemi -> do
               _ <- advance st
               branch <- parseCaseBranch
-              parseCaseBranches (branch : acc)
-            _ -> pure (reverse acc)
+              parseCaseBranches (acc ++ [branch])
+            _ -> pure acc
 
     TokUIdent x -> do
       -- We parse the payload expression at Application precedence
