@@ -1,0 +1,10 @@
+-- Known limitation: single-clause let with multiline record literal RHS.
+-- Field lines with `=` at clause-head indentation are currently misclassified
+-- as grouped-let sibling clauses by the layout-opening heuristic.
+
+let x =
+    {
+    y = 1,
+    z = 2
+    }
+in x.y
