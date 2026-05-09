@@ -50,7 +50,7 @@ e ::= x
     | \p => e
     | e e
     | let p = e in e
-   | case e of p => e ; ...
+    | case e of p => e ; ...
     | Variant L e
     | { l1 = e1, ..., ln = en }
     | e.f
