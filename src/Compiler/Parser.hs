@@ -523,7 +523,7 @@ parseNud tok st ex =
         _ -> pure ()
       expect TokIn st ex
       body <- parseExpr (precVal PrecLowest) st ex
-      -- Consume the TokFirtRBrace that closeAll inserts for same-line `in`
+      -- Consume the TokVirtRBrace that closeAll inserts for same-line `in`
       -- (multiline `in` already consumed it before the expect above)
       mLetClose <- peek st
       case mLetClose of
