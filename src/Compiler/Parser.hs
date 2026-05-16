@@ -35,11 +35,13 @@ precVal = \case
   PrecPrefix -> 35
   PrecSelect -> 40
 
+-- | Structured parse failure carrying user-facing message and precise span.
 data ParseError = MkParseError
   { msg   :: !Text
   , span  :: !Span
   } deriving (Show, Eq, Generic)
 
+-- | Internal parser cursor state over the layout-processed token stream.
 data ParserState = MkParserState
   { tokens :: ![Token]
   } deriving (Show, Eq, Generic)
@@ -123,6 +125,8 @@ parseTopLevel toks =
                 _ <- advance st
                 sigTy <- parseType st ex
                 let sigSpan = mergeSpan t.span (getTypeSpan sigTy)
+
+                consumeVirtualSemis st
                 mEnd <- peek st
                 case mEnd of
                   Just e | e.cls == TokEOF ->
@@ -135,6 +139,7 @@ parseTopLevel toks =
                       let rhsAnn = Ann (mergeSpan (getTypeSpan sigTy) (getSpan rhs)) rhs sigTy
                           pat    = PVar e.span name
                           defSp  = mergeSpan t.span (getSpan rhsAnn)
+                      consumeVirtualSemis st
                       mAfter <- peek st
                       case mAfter of
                         Just endTok | endTok.cls == TokEOF ->
@@ -149,11 +154,18 @@ parseTopLevel toks =
                     throw ex (MkParseError "Expected EOF after declaration" e.span)
                   Nothing ->
                     throw ex (MkParseError "Unexpected EOF after declaration" sigSpan)
+
               _ -> do
-                mDecl <- tryParseEquationDecl t name st ex
-                case mDecl of
-                  Just topLevel ->
-                    pure topLevel
+                mFirst <- tryParseClauseTail st ex
+                case mFirst of
+                  Just firstClause -> do
+                    moreClauses <- gatherAdditionalClauses name st ex
+                    topLevel <- lowerEquationClauses t name (firstClause : moreClauses) ex
+                    mEnd <- peek st
+                    case mEnd of
+                      Just e | e.cls == TokEOF -> pure topLevel
+                      Just e -> throw ex (MkParseError "Expected EOF after declaration" e.span)
+                      Nothing -> throw ex (MkParseError "Unexpected EOF after declaration" t.span)
                   Nothing -> do
                     put st startState
                     expr <- parseExpr (precVal PrecLowest) st ex
@@ -170,53 +182,145 @@ parseTopLevel toks =
               Just t' | t'.cls == TokEOF -> pure (TExpr expr)
               Just t' -> throw ex (MkParseError "Expected EOF after expression" t'.span)
               Nothing -> throw ex (MkParseError "Unexpected EOF after declaration" (getSpan expr))
-              
--- | Try to parse a single equation-style top-level declaration tail:
--- `name p1 ... pn = rhs`
--- If the shape does not match an equation clause, restore parser state and return Nothing.
-tryParseEquationDecl
+
+-- | Try to parse the tail of a single function-equation clause:
+-- One or more patterns followed by @=@ and a RHS expression.
+-- Returns @Nothing@ (restoring parser state) when the lookahead does not look
+-- like an equation clause, Does NTO consume EOF
+tryParseClauseTail
   :: forall st ex es. (st :> es, ex :> es)
-  => Token -> Text -> State ParserState st -> Exception ParseError ex -> Eff es (Maybe TopLevel)
-tryParseEquationDecl nameTok name st ex = do
+  => State ParserState st -> Exception ParseError ex -> Eff es (Maybe ([Pattern], Expr))
+tryParseClauseTail st ex = do
   startState <- get st
   mNext <- peek st
-  case mNext of
+  case mNext of 
     Just tok | isPatternStarter tok.cls -> do
       firstPat <- parsePattern st ex
-      mPats <- gatherPatterns [firstPat] startState
+      mPats <- gatherPats [firstPat] startState
       case mPats of
         Nothing -> pure Nothing
         Just pats -> do
           expect TokAssign st ex
           rhs <- parseExpr (precVal PrecLowest) st ex
-          let lamBody = foldr mkLam rhs pats
-              declPat = PVar nameTok.span name
-              declSpan = mergeSpan nameTok.span (getSpan lamBody)
-          mEnd <- peek st
-          case mEnd of
-            Just endTok | endTok.cls == TokEOF ->
-              pure (Just (TDecl (DeclDef declSpan declPat lamBody)))
-            Just badTok ->
-              throw ex (MkParseError "Expected EOF after declaration" badTok.span)
-            Nothing ->
-              throw ex (MkParseError "Unexpected EOF after declaration" declSpan)
+          pure (Just (pats, rhs))
     _ -> do
       put st startState
       pure Nothing
   where
-    gatherPatterns acc startState = do
+    gatherPats acc saved = do
       mTok <- peek st
       case mTok of
-        Just tok | tok.cls == TokAssign ->
-          pure (Just (reverse acc))
+        Just tok | tok.cls == TokAssign -> pure . Just . reverse $ acc
         Just tok | isPatternStarter tok.cls -> do
           pat <- parsePattern st ex
-          gatherPatterns (pat : acc) startState
+          gatherPats (pat : acc) saved
         _ -> do
-          put st startState
+          put st saved
           pure Nothing
-    mkLam pat body =
-      Lam (mergeSpan (getPatternSpan pat) (getSpan body)) pat Nothing body
+
+-- | After parsing a first equation clause, greedily consume additional
+-- clauses that begin with the same function name
+gatherAdditionalClauses 
+  :: forall st ex es. (st :> es, ex :> es)
+  => Text -> State ParserState st -> Exception ParseError ex -> Eff es [([Pattern], Expr)]
+gatherAdditionalClauses name st ex = go []
+  where
+    go acc = do
+      skipClauseSeparators
+      mTok <- peek st
+      case mTok of 
+        Just t | TokIdent n <- t.cls, n == name -> do
+          saved <- get st
+          _ <- advance st
+          mClause <- tryParseClauseTail st ex
+          case mClause of
+            Just clause -> go (clause : acc)
+            Nothing     -> do
+              put st saved
+              pure (reverse acc)
+        _ -> pure (reverse acc)
+
+    skipClauseSeparators :: Eff es ()
+    skipClauseSeparators = do
+      mTok <- peek st
+      case mTok of
+        Just t | t.cls == TokVirtSemi -> do
+          _ <- advance st
+          skipClauseSeparators
+        _ -> pure ()
+
+-- | Lower a list of same-name equation clauses to a single @DeclDef@
+-- 
+-- Single clause: preserves the existing @foldr mkLam@ lowering so that
+-- golden snapshots for @decl-equation-single-clause@ remain stable.
+--
+-- Multi-clause (arity 1): wraps in a lambda over a fresh @$arg0@ variable
+-- and inserts a @case@ dispatch. All clause patterns must have arity 1;
+-- other arities produce a clear parse error.
+lowerEquationClauses
+  :: forall ex es. (ex :> es)
+  => Token -- ^ name token (span source for synthetic nodes)
+  -> Text -- ^ function name (used in diagnostics)
+  -> [([Pattern], Expr)] -- ^ clauses: (patterns, rhs); non-empty by construction
+  -> Exception ParseError ex
+  -> Eff es TopLevel
+lowerEquationClauses nameTok name clauses ex =
+  case clauses of
+    [] ->
+      throw ex $ MkParseError
+        ("Internal parser error: empty equation clause group for '" <> name <> "'")
+        nameTok.span
+    [(pats, rhs)] ->
+      -- Single-clause: identical lowering to the previous tryParseEquationDecl.
+      let lamBody  =
+            foldr
+              (\pat body -> Lam (mergeSpan (getPatternSpan pat) (getSpan body)) pat Nothing body)
+              rhs
+              pats
+          declPat  = PVar nameTok.span name
+          declSpan = mergeSpan nameTok.span (getSpan lamBody)
+      in pure $ TDecl (DeclDef declSpan declPat lamBody)
+    (firstClause : restClauses) -> do
+      -- Multi-clause: check arity consistency without partial list functions.
+      let arity = length (fst firstClause)
+          allClauses = firstClause : restClauses
+      case filter (\(pats, _) -> length pats /= arity) restClauses of
+        (_:_) ->
+          throw ex $ MkParseError
+            ("Clauses for '" <> name <> "' have inconsistent arity")
+            nameTok.span
+        [] -> pure ()
+      case arity of
+        1 -> do
+          let argSpan = nameTok.span
+              argName = "$arg0"
+              argVar  = Var argSpan argName
+              toBranch (pats, rhs) = case pats of
+                [p] -> Right (p, rhs)
+                _   -> Left ()
+          case traverse toBranch allClauses of
+            Left _ ->
+              throw ex $ MkParseError
+                ("Internal parser error: arity check/destructure mismatch for '" <> name <> "'")
+                nameTok.span
+            Right branches ->
+              case reverse branches of
+                [] ->
+                  throw ex $ MkParseError
+                    ("Internal parser error: empty branch set for '" <> name <> "'")
+                    nameTok.span
+                (_, lastRhs) : _ -> do
+                  let caseSpan = mergeSpan argSpan (getSpan lastRhs)
+                      body     = Case caseSpan argVar branches
+                      lamSpan  = mergeSpan argSpan (getSpan body)
+                      lamExpr  = Lam lamSpan (PVar argSpan argName) Nothing body
+                      declSpan = mergeSpan nameTok.span (getSpan lamExpr)
+                  pure $ TDecl (DeclDef declSpan (PVar nameTok.span name) lamExpr)
+        _ ->
+          throw ex $ MkParseError
+            ("Multi-argument multi-clause equations are not yet supported; \
+             \use a single argument or a case expression")
+            nameTok.span
 
 -- | Recursively parses the interior fields of a record definition
 -- Handles standard fields separated by commas, and row extensions 
@@ -667,6 +771,10 @@ parseLed left tok st ex = case tok.cls of
     
   _ -> throw ex (MkParseError "Unexpected token in operator position" tok.span)
 
+-- | Tokens that may begin an expression in Pratt "application" position.
+--
+-- This set must remain coherent with 'tokenPrecedence' and parseNUD/parseLED
+-- behavior so implicit application is recognized consistently.
 isAppStarter :: TokenClass -> Bool
 isAppStarter = \case
   TokInt _    -> True
@@ -683,6 +791,9 @@ isAppStarter = \case
   TokCase     -> True
   _           -> False
 
+-- | Tokens that may begin a surface pattern.
+--
+-- Used by equation-clause parsing and other pattern-entry points.
 isPatternStarter :: TokenClass -> Bool
 isPatternStarter = \case
   TokWildcard -> True
@@ -694,7 +805,20 @@ isPatternStarter = \case
   TokFalse -> True
   TokUIdent _ -> True
   _ -> False
-  
+
+-- | Consume any number of layout-inserted virtual semicolons.
+--
+-- Top-level declaration parsing uses this to tolerate line-delimited
+-- declaration separators introduced by the layout pass.
+consumeVirtualSemis :: forall st es. (st :> es) => State ParserState st -> Eff es ()
+consumeVirtualSemis st = do
+  mTok <- peek st
+  case mTok of
+    Just t | t.cls == TokVirtSemi -> do
+      _ <- advance st
+      consumeVirtualSemis st
+    _ -> pure () 
+
 -- | Pure entry point for the Parser.
 runParser :: [Token] -> Either ParseError Expr
 runParser toks = 

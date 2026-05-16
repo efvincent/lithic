@@ -1,5 +1,25 @@
 # Revision history for lithic
 
+## 0.9.7.0 -- 2026-05-15 (Phase 9F First Slice)
+
+* Phase 9F first slice: single-argument multi-clause top-level equation grouping.
+	* Parser groups repeated same-name arity-1 equation clauses into a single declaration-level lowering.
+	* Multi-clause lowering target: `DeclDef name (\\$arg0 => case $arg0 of ...)`.
+	* Existing single-clause equation lowering path remains unchanged for snapshot stability.
+	* Top-level signature+equation pairing now tolerates layout-inserted virtual semicolon separators between lines.
+	* Top-level clause-head detection in the layout pass is tightened to avoid injecting spurious `TokVirtSemi` into ordinary expression inputs.
+	* Explicit parser diagnostics are now the contract for unsupported shapes:
+		* inconsistent same-name clause arities,
+		* multi-argument multi-clause groups (follow-on slice).
+* Tests and fixtures:
+	* Updated parser declaration unit tests to assert Phase 9F first-slice acceptance.
+	* Refreshed multi-clause fixtures/goldens to reflect grouped-lowering behavior and arity diagnostics.
+	* Kept explicit failing fixture coverage for non-groupable top-level clause streams.
+* Documentation sync:
+	* Updated `docs/language-spec.md` declaration status table for multi-clause arity-1 vs arity>1 support.
+	* Updated `docs/project-plan.md` roadmap status markers (Phase 9 current, 9F first slice complete).
+	* Updated README Phase 9 status note for declaration parsing capabilities.
+
 ## 0.9.6.0 -- 2026-05-09 (Phase 9E Layout Complete)
 
 * Phase 9E: bounded layout preprocessing pass.

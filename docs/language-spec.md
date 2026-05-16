@@ -1,8 +1,8 @@
 # Lithic Language Specification (Living Core Spec)
 
 Status: Active living spec for implemented behavior.
-Version: 0.3 (2026-05-08)
-Scope baseline: Parser + current bidirectional checker through Phase 7.
+Version: 0.4 (2026-05-16)
+Scope baseline: Parser + current bidirectional checker through Phase 9F first slice.
 
 This document is the normative source for the currently implemented Lithic surface language and static semantics. Where implementation and docs disagree, this spec is the authority to reconcile against.
 
@@ -10,7 +10,7 @@ This document is the normative source for the currently implemented Lithic surfa
 
 ### 1.1 Purpose
 
-Lithic is still in rapid language evolution phases. A complete formal report at this stage would incur frequent churn. This living core spec defines the stable implemented core needed to prevent semantic drift while Phase 7 (pattern exhaustiveness and reachability) is under active development.
+Lithic is still in rapid language evolution phases. A complete formal report at this stage would incur frequent churn. This living core spec defines the stable implemented core needed to prevent semantic drift while Phase 9 declaration-group work is under active development.
 
 Post-Phase-7 checkpoint note:
 The formalization checkpoint for pattern coverage/reachability and specification boundaries has been completed in this revision.
@@ -96,10 +96,10 @@ The lexer recognizes the following core keywords/symbols used by the implemented
 - `-` (prefix unary minus and infix subtraction)
 
 Reserved (not currently implemented):
-- Multi-clause function equations (for example, repeated `name pat = expr` clauses for the same name).
 - Guarded declaration bars (for example, `| guard => expr`).
 
 Note: single-clause equation-style declarations (`name p1 ... pn = expr`) are implemented in `parseTopLevel` as of Phase 9D.
+Note: single-argument multi-clause equations (`f p = e` repeated with same name/arity) are implemented in `parseTopLevel` as of Phase 9F first slice.
 
 ### 2.5 Layout Rules (Phase 9E — Complete)
 
@@ -207,8 +207,8 @@ Notes:
 
 Current parser entrypoint status:
 1. `runParser` remains expression-oriented.
-2. `parseTopLevel` supports minimal declaration forms: `def Pattern = Expr`, `ident : Type`, same-name signature+equation pairing (`ident : Type` followed by `ident = Expr`), and single-clause equation forms (`f p1 ... pn = expr`).
-3. Multi-clause function equations and guarded clauses remain reserved pending declaration-group support.
+2. `parseTopLevel` supports declaration forms: `def Pattern = Expr`, `ident : Type`, same-name signature+equation pairing (`ident : Type` followed by `ident = Expr`), single-clause equations (`f p1 ... pn = expr`), and Phase 9F first-slice single-argument multi-clause grouping (`f p = e` repeated).
+3. Remaining declaration-group work is reserved: multi-argument multi-clause grouping and guarded clauses.
 4. The layout pass is in place and currently powers `case` branch separators and grouped local `let` clauses.
 5. Disambiguation rule at top level: bare `ident : Type` is interpreted as a signature declaration.
 6. In this slice, `parseTopLevel` does not provide an expression-annotation escape hatch for this shape; `ident`-headed annotation forms at top level are reserved to declaration parsing.
@@ -221,10 +221,12 @@ Status table for planned declaration forms:
 | Minimal top-level signature declaration | `ident : Type` | Implemented (parseTopLevel only) | Signature-only declaration parses. Bare `ident : Type` at top level is reserved for this declaration form. |
 | Same-name signature+equation pair | `ident : Type` then `ident = expr` | Implemented (parseTopLevel only) | Lowered in parser to a definition with an annotated RHS; full declaration grouping remains unimplemented. |
 | Function equation (single clause) | `f p1 ... pn = expr` | Implemented (parseTopLevel only) | Lowered by parser to a declaration whose RHS is nested lambdas over equation patterns. |
-| Function equation (multi clause) | repeated `f ... = ...` clauses | Not implemented yet | Clauses will be grouped by function name into one declaration unit. |
+| Function equation (multi clause, arity 1) | repeated `f p = e` clauses | Implemented (parseTopLevel only) | Lowered by parser to one `DeclDef` whose RHS is `\$arg0 => case $arg0 of ...`. |
+| Function equation (multi clause, arity > 1) | repeated `f p1 ... pn = e` clauses | Not implemented yet | Parser currently reports an explicit diagnostic that multi-argument clause grouping is not supported yet. |
 | Grouped local let clauses | `let` then layout-delimited clause list, single trailing `in` | Implemented | Lowered to ordered nested `Let` nodes with span preservation. |
 | Guarded clause | `f p1 ... pn` then `| guard => expr` lines | Not implemented yet | Guard RHS uses fat arrow to remain consistent with term-level branch delimiters. |
-| Pattern-headed clause | `f <pattern> ... = expr` | Not implemented yet | Will lower through the same match-analysis pipeline as `case`. |
+| Pattern-headed clause (single argument) | `f <pattern> = expr` | Implemented (parseTopLevel only) | Included in Phase 9F first-slice clause grouping and lowered through the same lambda/case path as other arity-1 clauses. |
+| Pattern-headed clause (multi argument) | `f <pattern1> <pattern2> ... = expr` | Not implemented yet | Awaiting the multi-argument clause-group follow-on slice. |
 
 ```text
 TopLevel ::= Decl | Expr

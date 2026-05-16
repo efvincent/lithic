@@ -1,0 +1,1 @@
+[Decl] DeclDef [1,1]..[2,16] (PVar [1,1]..[1,6] "isZero") (Lam [1,1]..[2,16] (PVar [1,1]..[1,6] "$arg0") Nothing (Case [1,1]..[2,16] (Var [1,1]..[1,6] "$arg0") [(PLit [1,8]..[1,8] (LInt 0),Lit [1,12]..[1,15] (LBool True)),(PWildcard [2,8]..[2,8],Lit [2,12]..[2,16] (LBool False))]))
