@@ -207,8 +207,8 @@ Notes:
 
 Current parser entrypoint status:
 1. `runParser` remains expression-oriented.
-2. `parseTopLevel` supports minimal declaration forms: `def Pattern = Expr`, `ident : Type`, same-name signature+equation pairing (`ident : Type` followed by `ident = Expr`), and single-clause equation forms (`f p1 ... pn = expr`).
-3. Multi-clause function equations and guarded clauses remain reserved pending declaration-group support.
+2. `parseTopLevel` supports declaration forms: `def Pattern = Expr`, `ident : Type`, same-name signature+equation pairing (`ident : Type` followed by `ident = Expr`), single-clause equations (`f p1 ... pn = expr`), and Phase 9F first-slice single-argument multi-clause grouping (`f p = e` repeated).
+3. Remaining declaration-group work is reserved: multi-argument multi-clause grouping and guarded clauses.
 4. The layout pass is in place and currently powers `case` branch separators and grouped local `let` clauses.
 5. Disambiguation rule at top level: bare `ident : Type` is interpreted as a signature declaration.
 6. In this slice, `parseTopLevel` does not provide an expression-annotation escape hatch for this shape; `ident`-headed annotation forms at top level are reserved to declaration parsing.
@@ -225,7 +225,8 @@ Status table for planned declaration forms:
 | Function equation (multi clause, arity > 1) | repeated `f p1 ... pn = e` clauses | Not implemented yet | Parser currently reports an explicit diagnostic that multi-argument clause grouping is not supported yet. |
 | Grouped local let clauses | `let` then layout-delimited clause list, single trailing `in` | Implemented | Lowered to ordered nested `Let` nodes with span preservation. |
 | Guarded clause | `f p1 ... pn` then `| guard => expr` lines | Not implemented yet | Guard RHS uses fat arrow to remain consistent with term-level branch delimiters. |
-| Pattern-headed clause | `f <pattern> ... = expr` | Not implemented yet | Will lower through the same match-analysis pipeline as `case`. |
+| Pattern-headed clause (single argument) | `f <pattern> = expr` | Implemented (parseTopLevel only) | Included in Phase 9F first-slice clause grouping and lowered through the same lambda/case path as other arity-1 clauses. |
+| Pattern-headed clause (multi argument) | `f <pattern1> <pattern2> ... = expr` | Not implemented yet | Awaiting the multi-argument clause-group follow-on slice. |
 
 ```text
 TopLevel ::= Decl | Expr

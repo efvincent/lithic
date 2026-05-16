@@ -41,8 +41,8 @@ In the REPL:
   ```
 - Primitive literals currently include `Int`, `Float`, `String`, and `Bool` (`True`/`False`).
 - Prefix unary minus and infix subtraction are supported (`-x`, `x - y`).
-- Function-equation syntax with guards and pattern-headed clauses is planned but not yet implemented.
-- Top-level declaration parsing (used by the file/golden pipeline) now supports single-argument multi-clause equations in Phase 9F first slice; multi-argument clause groups and guards remain pending.
+- Top-level declaration parsing (used by the file/golden pipeline) supports Phase 9F first-slice single-argument equation grouping, including pattern-headed arity-1 clauses.
+- Guarded equations and multi-argument clause grouping remain pending.
 - Phase-7 behavior: case exhaustiveness and unreachable-branch checks are enforced for both finite constructor universes and the current open-universe cases supported by the pattern analysis.
 - Successful input is rendered as two lines: `[AST] <show ast>` followed by `[Type] <show type>`.
 - Lexing, parsing, and type errors are shown inline in the same pane.
