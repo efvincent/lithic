@@ -1,1 +1,1 @@
-Parse Error: Expected EOF after declaration
+[Decl] DeclDef [1,1]..[2,16] (PVar [1,1]..[1,3] "not") (Lam [1,1]..[2,16] (PVar [1,1]..[1,3] "$arg0") Nothing (Case [1,1]..[2,16] (Var [1,1]..[1,3] "$arg0") [(PLit [1,5]..[1,8] (LBool True),Lit [1,12]..[1,16] (LBool False)),(PLit [2,5]..[2,9] (LBool False),Lit [2,13]..[2,16] (LBool True))]))

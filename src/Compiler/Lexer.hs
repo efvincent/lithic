@@ -84,7 +84,10 @@ reservedWords = Map.fromList
   , ("False",  TokFalse)
   ]
 
--- | The core scanning loop. Takes handles for State and Exceptionsshared, returns a list of tokens
+-- | The core scanning loop.
+--
+-- Takes handles for scanner state and lexical exceptions, then returns a full
+-- token stream with source spans.
 scanTokens
   :: forall st ex es. (st :> es, ex :> es)
   => State ScannerState st
@@ -260,8 +263,8 @@ consumeWhile predicate st = T.pack . reverse <$> loop []
           loop (c : acc)
         _ -> pure acc
 
--- | The pure entry point for the lexter.
--- This completely encapsulates the Bluefin effectrs so the rest of the compiler
+-- | The pure entry point for the lexer.
+-- This completely encapsulates the Bluefin effects so the rest of the compiler
 -- just sees a function from Text -> Either LexError [Token]
 runLexer :: Text -> Either LexError [Token]
 runLexer input =
@@ -272,57 +275,14 @@ runLexer input =
           scanTokens st ex
 
 -- | Pure bounded layout preprocessing pass.
--- 
--- Inserts virtual separators and block-close tokens for indentation-delimited
--- case branches and grouped let clauses. Layout blocks are opened after
--- `TokOf` (case) and `TokLet` (grouped let).
-runLayout' :: [Token] -> [Token]
-runLayout' = go False [] Nothing
-  where
-    go pending layoutCols prevLine toks =
-      case toks of
-        [] -> []
-        (tok:rest) ->
-          case tok.cls of
-            TokEOF -> closeAll tok.span layoutCols ++ [tok]
-            _ ->
-              let lineNow = spanStartLine tok.span
-                  colNow = spanStartCol tok.span
-                  (layoutCols1, virtuals) =
-                    if isNewLine prevLine lineNow
-                    then applyLineBreak tok.span colNow layoutCols
-                    else (layoutCols, [])
-                  layoutCols2 =
-                    if pending
-                    then colNow : layoutCols1
-                    else layoutCols1
-                  pending' = tok.cls == TokOf || tok.cls == TokLet
-              in
-              virtuals ++ [tok] ++ go pending' layoutCols2 (Just lineNow) rest
-    
-    isNewLine Nothing _ = False
-    isNewLine (Just prev) cur = prev /= cur
-
-    applyLineBreak sp col cols = closeDedent sp col cols []
-
-    closeDedent sp col cols acc =
-      case cols of
-        top:rest | col < top ->
-          closeDedent sp col rest (acc ++ [MkToken TokVirtRBrace sp])
-        top:_ | col == top ->
-          (cols, acc ++ [MkToken TokVirtSemi sp])
-        _ -> 
-          (cols, acc)
-
-    closeAll sp cols = map (\_ -> MkToken TokVirtRBrace sp) cols
-
-    spanStartLine (MkSpan sl _ _ _ ) = sl
-    spanStartCol  (MkSpan _ sc _ _ ) = sc
-
--- | Pure bounded layout preprocessing pass.
+--
 -- Inserts 'TokVirtSemi' (same-indent separator) and 'TokVirtRBrace' (block close)
 -- virtual tokens. Layout blocks are opened after 'TokOf' (case branches) and
 -- 'TokLet' (grouped let clauses).
+--
+-- At top-level declaration scope, a conservative clause-head detector also
+-- inserts 'TokVirtSemi' between newline-separated equation clauses so
+-- `parseTopLevel` can group multi-clause equations without indentation hacks.
 runLayout :: [Token] -> [Token]
 runLayout = go False [] Nothing
   where
@@ -334,9 +294,12 @@ runLayout = go False [] Nothing
           let curLine  = tok.span.startLine
               curCol   = tok.span.startCol
               newLine  = maybe False (/= curLine) prevLine
-              (cols1, virtuals)
+              (cols1, virtualsBase)
                 | newLine   = dedent tok.span curCol cols []
                 | otherwise = (cols, [])
+              virtuals
+                | newLine, null cols1, isTopLevelClauseHead tok rest = virtualsBase ++ [MkToken TokVirtSemi tok.span]
+                | otherwise = virtualsBase
               cols2
                 | pending   = curCol : cols1
                 | otherwise = cols1
@@ -346,6 +309,8 @@ runLayout = go False [] Nothing
                 | otherwise         = False
           in virtuals ++ [tok] ++ go nextPending cols2 (Just curLine) rest
 
+    -- | Decide whether a `let` should open a grouped-clause layout block.
+    -- Single-clause lets with multiline RHS should not open one.
     shouldOpenLetLayout :: Int -> [Token] -> Bool
     shouldOpenLetLayout _ [] = False
     shouldOpenLetLayout _ (firstTok:rest)
@@ -375,6 +340,38 @@ runLayout = go False [] Nothing
           | t.cls == TokAssign = True
           | otherwise = lineHasAssign ln ts
     
+    -- | Conservative detector for top-level equation heads on a fresh line.
+    -- Only identifier-headed lines are considered declaration candidates.
+    isTopLevelClauseHead :: Token -> [Token] -> Bool
+    isTopLevelClauseHead tok ts =
+      case tok.cls of
+        TokIdent _ -> clauseHeadTailHasAssign tok.span.startLine ts
+        _ -> False
+
+    -- | Validate that the rest of the line looks like a clause head by
+    -- requiring an assignment token after only pattern-head tokens.
+    clauseHeadTailHasAssign :: Int -> [Token] -> Bool
+    clauseHeadTailHasAssign _ [] = False
+    clauseHeadTailHasAssign ln (t:ts)
+      | t.cls == TokEOF         = False
+      | t.span.startLine /= ln  = False
+      | t.cls == TokAssign      = True
+      | isClauseHeadToken t.cls = clauseHeadTailHasAssign ln ts
+      | otherwise               = False
+    
+    -- | Tokens allowed in the head segment before '=' for top-level clauses.
+    isClauseHeadToken :: TokenClass -> Bool
+    isClauseHeadToken = \case
+      TokIdent _  -> True
+      TokUIdent _ -> True
+      TokWildcard -> True
+      TokInt _    -> True
+      TokFloat _  -> True
+      TokString _ -> True
+      TokTrue     -> True
+      TokFalse    -> True
+      _           -> False
+
     dedent _  _   []         acc = ([], acc)
     dedent sp col (top:rest) acc
       | col < top  = dedent sp col rest (acc ++ [MkToken TokVirtRBrace sp])

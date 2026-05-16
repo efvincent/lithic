@@ -35,11 +35,13 @@ precVal = \case
   PrecPrefix -> 35
   PrecSelect -> 40
 
+-- | Structured parse failure carrying user-facing message and precise span.
 data ParseError = MkParseError
   { msg   :: !Text
   , span  :: !Span
   } deriving (Show, Eq, Generic)
 
+-- | Internal parser cursor state over the layout-processed token stream.
 data ParserState = MkParserState
   { tokens :: ![Token]
   } deriving (Show, Eq, Generic)
@@ -123,6 +125,8 @@ parseTopLevel toks =
                 _ <- advance st
                 sigTy <- parseType st ex
                 let sigSpan = mergeSpan t.span (getTypeSpan sigTy)
+
+                consumeVirtualSemis st
                 mEnd <- peek st
                 case mEnd of
                   Just e | e.cls == TokEOF ->
@@ -135,6 +139,7 @@ parseTopLevel toks =
                       let rhsAnn = Ann (mergeSpan (getTypeSpan sigTy) (getSpan rhs)) rhs sigTy
                           pat    = PVar e.span name
                           defSp  = mergeSpan t.span (getSpan rhsAnn)
+                      consumeVirtualSemis st
                       mAfter <- peek st
                       case mAfter of
                         Just endTok | endTok.cls == TokEOF ->
@@ -149,6 +154,7 @@ parseTopLevel toks =
                     throw ex (MkParseError "Expected EOF after declaration" e.span)
                   Nothing ->
                     throw ex (MkParseError "Unexpected EOF after declaration" sigSpan)
+
               _ -> do
                 mFirst <- tryParseClauseTail st ex
                 case mFirst of
@@ -220,8 +226,9 @@ gatherAdditionalClauses
 gatherAdditionalClauses name st ex = go []
   where
     go acc = do
+      skipClauseSeparators
       mTok <- peek st
-      case mTok of
+      case mTok of 
         Just t | TokIdent n <- t.cls, n == name -> do
           saved <- get st
           _ <- advance st
@@ -233,12 +240,21 @@ gatherAdditionalClauses name st ex = go []
               pure (reverse acc)
         _ -> pure (reverse acc)
 
+    skipClauseSeparators :: Eff es ()
+    skipClauseSeparators = do
+      mTok <- peek st
+      case mTok of
+        Just t | t.cls == TokVirtSemi -> do
+          _ <- advance st
+          skipClauseSeparators
+        _ -> pure ()
+
 -- | Lower a list of same-name equation clauses to a single @DeclDef@
 -- 
--- Single clause: preserves the existing @ofldr mkLam@ lowering so that
+-- Single clause: preserves the existing @foldr mkLam@ lowering so that
 -- golden snapshots for @decl-equation-single-clause@ remain stable.
 --
--- Multi-clause (arity 1): wraps in a lambda overa fresh @$arg0@ variable
+-- Multi-clause (arity 1): wraps in a lambda over a fresh @$arg0@ variable
 -- and inserts a @case@ dispatch. All clause patterns must have arity 1;
 -- other arities produce a clear parse error.
 lowerEquationClauses
@@ -755,6 +771,10 @@ parseLed left tok st ex = case tok.cls of
     
   _ -> throw ex (MkParseError "Unexpected token in operator position" tok.span)
 
+-- | Tokens that may begin an expression in Pratt "application" position.
+--
+-- This set must remain coherent with 'tokenPrecedence' and parseNUD/parseLED
+-- behavior so implicit application is recognized consistently.
 isAppStarter :: TokenClass -> Bool
 isAppStarter = \case
   TokInt _    -> True
@@ -771,6 +791,9 @@ isAppStarter = \case
   TokCase     -> True
   _           -> False
 
+-- | Tokens that may begin a surface pattern.
+--
+-- Used by equation-clause parsing and other pattern-entry points.
 isPatternStarter :: TokenClass -> Bool
 isPatternStarter = \case
   TokWildcard -> True
@@ -782,7 +805,20 @@ isPatternStarter = \case
   TokFalse -> True
   TokUIdent _ -> True
   _ -> False
-  
+
+-- | Consume any number of layout-inserted virtual semicolons.
+--
+-- Top-level declaration parsing uses this to tolerate line-delimited
+-- declaration separators introduced by the layout pass.
+consumeVirtualSemis :: forall st es. (st :> es) => State ParserState st -> Eff es ()
+consumeVirtualSemis st = do
+  mTok <- peek st
+  case mTok of
+    Just t | t.cls == TokVirtSemi -> do
+      _ <- advance st
+      consumeVirtualSemis st
+    _ -> pure () 
+
 -- | Pure entry point for the Parser.
 runParser :: [Token] -> Either ParseError Expr
 runParser toks = 

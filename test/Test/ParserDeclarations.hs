@@ -11,8 +11,9 @@ import Compiler.AST (TopLevel(..))
 import Compiler.Lexer (Token(..), TokenClass(..), runLexer)
 import Compiler.Parser (parseTopLevel)
 
--- | Phase 9 parser baseline for top-level forms.
--- `def` declarations now parse; other declaration syntaxes are still rejected.
+-- | Phase 9 parser declaration coverage.
+-- Includes `def`, signature forms, single-clause equations, and Phase 9F
+-- first-slice single-argument multi-clause equations.
 parserDeclarationsUnitTests :: TestTree
 parserDeclarationsUnitTests =
   testGroup "Phase 9 Parser Declaration Baseline"
@@ -37,11 +38,38 @@ parserDeclarationsUnitTests =
     , testCase "signature-equation pair parses successfully (Phase 9B.2)" $
       expectTopLevelDeclSuccess "id : Int\nid = 1"
 
+    , testCase "signature-equation pair tolerates blank separator lines" $
+      expectTopLevelDeclSuccess "id : Int\n\nid = 1"
+
+    , testCase "signature-equation pair tolerates comment separator lines" $
+      expectTopLevelDeclSuccess "id : Int\n-- comment\nid = 1"
+
     , testCase "guarded declaration is currently rejected" $
         expectTopLevelFailure "isZero n | n == 0 => True"
 
-    , testCase "multiple clauses for same name are currently rejected" $
-        expectTopLevelFailure "f 0 = 1\nf 1 = 2"
+    , testCase "single-argument multi-clause equations parse successfully (Phase 9F first slice)" $
+        expectTopLevelDeclSuccess "f 0 = 1\nf 1 = 2"
+
+    , testCase "single-argument multi-clause equations support constructor-headed patterns" $
+      expectTopLevelDeclSuccess "unwrap Ok x = x\nunwrap _ = 0"
+
+    , testCase "single-argument multi-clause equations tolerate trailing spaces" $
+      expectTopLevelDeclSuccess "f 0 = 1   \nf 1 = 2   "
+
+    , testCase "multi-argument multi-clause equations are currently rejected" $
+      expectTopLevelFailureMessage
+        "Multi-argument multi-clause equations are not yet supported"
+        "f x y = 1\nf z w = 2"
+
+    , testCase "same-name clauses with inconsistent arity are rejected" $
+      expectTopLevelFailureMessage
+        "inconsistent arity"
+        "f x = 1\nf y z = 2"
+
+    , testCase "inconsistent arity is still detected across blank separator lines" $
+      expectTopLevelFailureMessage
+        "inconsistent arity"
+        "f x = 1\n\nf y z = 2"
 
     , testCase "mutual recursion block is currently rejected" $
         expectTopLevelFailure "f x = g x\ng x = f x"
@@ -54,6 +82,10 @@ parserDeclarationsUnitTests =
 
     , testCase "expression-only input still parses as top-level expression" $
         expectTopLevelExprSuccess "let x = 1 in x"
+
+    , testCase "top-level expression with identifier-led continuation line does not misclassify as clause" $
+      expectTopLevelExprSuccess
+        "let f = \\x => x in\nf True 1"
 
     , testCase "grouped local let clauses with one trailing in parse as expression" $
       expectTopLevelExprSuccess "let x = 1\n    y = 2\nin x"
