@@ -226,36 +226,30 @@ Status: Completed in 0.9.3.0 documentation milestone.
   * Phase 9D adds single-clause equation-style top-level declaration parsing (`f p1 ... pn = expr`) lowered through parser-produced lambdas.
   * Phase 9E (implemented slice): adds a bounded layout preprocessing pass (`runLayout`) between the lexer and the parser. The current implementation powers layout-delimited `case` branches and grouped local `let` clauses, while declaration-group features remain follow-up work.
   * Phase 9F first slice (complete): single-argument multi-clause top-level function equations. Parser collects same-name arity-1 clauses and lowers them to a single `DeclDef` whose RHS is a lambda over a fresh argument variable with a `case` dispatch over the clause list.
-  * Remaining work after 9F: multi-argument multi-clause (9F cont.), `where` block parsing (9G, in progress), Core/Elaborator declaration-group plumbing, REPL environment persistence.
+  * Phase 9G (complete): `where` blocks on equation-style top-level declarations. Layout opens a block after `TokWhere`; bindings desugar to nested `Let` nodes via `wrapBodyWithWhere`.
+  * **Restructuring note (May 2026):** The remaining Phase 9 syntax tasks (multi-arg multi-clause, guards, pattern-headed equations, lists, tuples, local function-equation syntax) are **deferred to Phase 11** so Phase 10 (early C code generation) can be reached without blocking on surface-syntax completeness. The two remaining Phase 9 tasks required as a Phase 10 prerequisite are: Core/Elaborator top-level declaration groups and REPL environment persistence.
 * **Tasks:**
   * [ ] Add syntax highlighting, stronger multi-line editing ergonomics, better history/navigation behavior, and tighter evaluator-aware feedback.
   * [x] Add parser support for initial top-level `def` declaration form (`def p = expr`) and top-level parse routing.
   * [x] Extend parser support to minimal top-level binding declarations with optional type signatures (`def`, signature-only, and same-name signature+equation pairing).
-  * [ ] Extend parser support to full declaration grouping semantics (`def`/`let` at module scope, multi-clause equations, and grouped signature association).
   * [x] Add parser support for single-clause equation-style declarations (`f p1 ... pn = expr`) lowered to declaration-level lambda form.
   * [x] Decision (Phase 9E): introduce bounded layout-rule preprocessing pass before implementing multi-clause grouping. Rationale: multi-clause parsing requires distinguishing clause heads from Pratt application continuations; a column-check hack inside `peekPrecedence` was evaluated and rejected in favour of a proper `runLayout :: [Token] -> [Token]` pass that inserts virtual `TokVirtSemi` and `TokVirtRBrace` tokens. This keeps the expression parser stateless w.r.t. indentation and unblocks `where` blocks at no additional cost.
   * [x] Decision (Phase 9E): retire `|` as explicit case-branch prefix. Branches will be layout-delimited under `of`; `TokVirtSemi` separates them. `|` is kept reserved to error clearly on old input.
   * [x] Implement `runLayout` preprocessing pass (Phase 9E): insert `TokVirtSemi` / `TokVirtRBrace` virtual tokens; wire between `runLexer` and `parseTopLevel`/`runParser`. Current layout triggers are after `of` and `let`.
   * [x] Update `parseTopLevel` and `parseCase` to use `TokVirtSemi` as separator; remove parser-side branch-column tracking and stop consuming `|` tokens for case branches.
   * [x] Update all golden fixtures and test inputs that use `| pat => expr` syntax.
-  * [ ] Add parser support for multi-clause function equations using virtual token separators.
-    * [x] Phase 9F first slice: single-argument multi-clause equations via `tryParseClauseTail` + `gatherAdditionalClauses` + `lowerEquationClauses`; single-clause path preserves existing `foldr mkLam` lowering to keep golden snapshots stable.
-    * [ ] Phase 9F follow-on: multi-argument multi-clause using record-pattern tuple scrutinee.
-  * [ ] Add parser support for local function-equation syntax with shared-name clauses.
+  * [x] Add parser support for single-argument multi-clause function equations using virtual token separators (Phase 9F first slice).
   * [x] Add parser support for grouped local `let` clauses with one trailing `in`, delimited by layout-inserted `TokVirtSemi` separators.
-  * [x] Add parser support for `where` blocks on declarations/equations using layout delimiters (`TokVirtSemi` / `TokVirtRBrace`) and scoped association to the owning declaration group.
-    * Phase 9G first slice: `TokWhere` layout block opens on the next token column (like `of`); `parseOptionalWhere` + `parseWhereBindings` + `wrapBodyWithWhere` desugar bindings to nested `Let` nodes wrapping the equation body. Supported on equation-style top-level declarations only; `def` form deferred.
-    * Fix: `not pending` guard added to top-level `TokVirtSemi` injection to prevent spurious separators before the first token of any newly-opened layout block.
-  * [x] Define and implement lowering for declaration/equation `where` blocks to internal local-binding structure with source-span preservation.
-  * [ ] Add guard syntax on function equations (Haskell-style guard lists) and lower to decision trees.
-  * [ ] Add pattern-headed function equations and desugar to `case` while preserving source spans.
-  * [ ] Extend the REPL evaluator loop to maintain a persistent top-level environment across submissions.
-  * [ ] Extend Core AST and Elaborator to represent top-level declaration groups.
-  * [ ] **Future Lexical/Parsing Enhancements:**
-    * [ ] Support floats without an integer part (e.g., `.14159`).
-    * [ ] Support scientific notation (e.g., `1e-5`).
-    * [ ] Support multi-line strings.
-    * [ ] Support Character literals (e.g., `'a'`).
+  * [x] Add parser support for `where` blocks on equation-style declarations (Phase 9G).
+  * [x] Define and implement lowering for `where` blocks to nested `Let` nodes with source-span preservation.
+  * [ ] **[Phase 10 prerequisite]** Extend Core AST and Elaborator to represent top-level declaration groups (named functions, mutual recursion groups).
+  * [ ] **[Phase 10 prerequisite]** Extend the REPL evaluator loop to maintain a persistent top-level environment across submissions.
+  * [ ] **[Deferred to Phase 11]** Multi-argument multi-clause equations using record-pattern tuple scrutinee.
+  * [ ] **[Deferred to Phase 11]** Add guard syntax on function equations (Haskell-style guard lists) and lower to decision trees.
+  * [ ] **[Deferred to Phase 11]** Add pattern-headed function equations and desugar to `case` while preserving source spans.
+  * [ ] **[Deferred to Phase 11]** Add parser support for local function-equation syntax with shared-name clauses.
+  * [ ] **[Deferred to Phase 11]** Extend parser support to full declaration grouping semantics at module scope.
+  * [ ] **[Deferred to Phase 11]** Future lexical enhancements: floats without integer part, scientific notation, multi-line strings, character literals.
 
   #### Phase 9E Implementation Note: Grouped Local `let` Layout Pitfalls
 
@@ -272,61 +266,69 @@ Status: Completed in 0.9.3.0 documentation milestone.
   Follow-up caution:
   * Reuse the same gating approach when extending layout to declaration groups and `where` blocks to avoid repeating the over-open/early-close token regression.
 
-### 📅 Phase 9.5: List / Sequence Type & `::` Cons Syntax
-* **Objective:** Introduce a built-in list/sequence type with `::` as the cons operator at both expression and pattern level.
-* **Design notes:**
-  * Lithic uses `:` for type annotations (e.g., `expr : Type`), so `:` is not available for cons. `::` is chosen as the surface cons operator, analogous to Haskell's `:`, to avoid ambiguity.
-  * `::` is a right-associative infix operator at the expression level: `1 :: 2 :: []`.
-  * At the pattern level, `x :: xs` destructs head and tail; `[]` matches the empty list.
-  * Exhaustiveness analysis must account for the `::` / `[]` constructor pair as a two-constructor closed universe (no open variant row behavior).
-  * The list type may initially be built in as `List a` with special parser support rather than derived from general data declarations.
-  * `[a, b, c]` list literal syntax should desugar to `a :: b :: c :: []` during elaboration.
-  * Long-term: when a general algebraic data declaration form is available (Phase 10+), the list type can be defined in a standard library file rather than hard-coded in the compiler.
+### 📅 Phase 10: C Code Generation — First Pass
+* **Objective:** Produce a working end-to-end C backend for the monomorphic subset of Lithic programs. This is an intentionally scoped first pass: prove the zero-runtime concept, establish the code generation pipeline, and emit correct C for the programs that can already be expressed and type-checked. Surface-syntax completeness is explicitly deferred; adding new syntax in Phase 11 will not require touching the backend.
+* **Prerequisites:** Phase 9 top-level Core/Elaborator plumbing (named top-level functions in Core; REPL persistent environment). No other Phase 9 deferred items are required.
+* **Scope (in):**
+  * Monomorphic programs only — any `TForall` / `TMeta` surviving zonk is a hard codegen error: "program is not fully monomorphic; instantiate before code generation".
+  * Primitive types: `Int` → `int64_t`, `Float` → `double`, `String` → `const char*` (null-terminated, immutable), `Bool` → `int` (`0`/`1`).
+  * Closures: function-pointer + captured-variables struct (standard flat capture layout).
+  * Structural records (Mode A / `KRow`): heap-allocated key-value arrays; string-keyed field access. Explicit "slow path" — zero-cost nominal struct layout deferred to Phase 14 (FBIP upgrade).
+  * Variants: tagged C union with `int` discriminant and `void*` payload.
+  * Top-level named functions: emitted as C-level named functions.
+  * `let` bindings: stack-allocated locals.
+  * `case` expressions: C `switch`/`if-else` chains over discriminants.
+  * Single-file output: one `.c` translation unit per program.
+  * Memory model: `malloc`-and-leak. No GC, no FBIP, no reference counting. Honest for first pass; replaced in Phase 14.
+* **Scope (out / deferred):**
+  * Polymorphic / higher-rank programs (deferred until monomorphization pass exists).
+  * Nominal struct FBIP layout and in-place mutation (Phase 14).
+  * Linear types / ownership tracking (Phase 14).
+  * Module system / multi-file linking (Phase 12).
+  * FFI: calling C from Lithic (deferred to Phase 10b or Phase 14 upgrade).
 * **Tasks:**
-  * [ ] Add `::` as a right-associative infix cons operator in the lexer and parser.
-  * [ ] Add `[]` as the empty list literal.
-  * [ ] Add `[a, b, c]` list literal sugar and desugar to `::` chains in the elaborator.
-  * [ ] Add `List a` type constructor and `TList` AST node (or equivalent row encoding).
-  * [ ] Extend `checkPattern` and pattern matrix to handle `::` / `[]` as a closed two-constructor universe.
-  * [ ] Extend the evaluator with `VList` or a cons-cell value representation.
-  * [ ] Add golden fixtures covering list construction, deconstruction, and exhaustiveness errors.
+  * [ ] Add `Compiler.CGen` module: entry point `cgenProgram :: [CoreDecl] -> Text`.
+  * [ ] Implement primitive type mapping (`Int`, `Float`, `String`, `Bool`).
+  * [ ] Implement closure layout: generate per-closure capture structs and function pointers.
+  * [ ] Implement structural record codegen: heap-allocated field array with string-keyed lookup helper.
+  * [ ] Implement variant codegen: discriminant integer + payload union.
+  * [ ] Implement top-level function emission as C named functions with correct C type signatures.
+  * [ ] Implement `let` → stack local, `case` → `switch`/`if-else` chain.
+  * [ ] Implement monomorphism guard: reject any zonked type containing `TForall` or unresolved `TMeta` with a codegen-phase diagnostic.
+  * [ ] Add a `--emit-c` flag to the CLI that runs the full pipeline through `cgenProgram` and writes `.c` output.
+  * [ ] Add golden fixtures for a small set of monomorphic programs: identity, factorial, record construction and selection, variant match.
+  * [ ] Validate emitted C compiles and runs correctly with `gcc -std=c11`.
 
-### 📅 Phase 9.6: Tuples & Tuple Sections
-* **Objective:** Introduce tuple syntax as first-class surface sugar over the existing row polymorphism infrastructure, gaining n-ary flat product types without Haskell-style per-arity boilerplate.
-* **Design notes:**
-  * **Representation:** Tuples are anonymous records with integer positional labels (`0`, `1`, `2`, …). `(Int, String)` is syntactic sugar for `{ 0 : Int, 1 : String }` at the type level, and `(e1, e2)` desugars to `{ 0 = e1, 1 = e2 }` at the term level. The existing row unification engine handles them with zero new machinery.
-  * The comma inside `( … )` is a purely structural lexical separator — it has no independent operator meaning and does not conflict with any other use of comma in the grammar.
-  * **Unit:** `()` is the zero-tuple, sugar for the empty record `{}`. `TUnit` is an alias for the empty row type. The empty record already exists in the type system; `()` adds only a surface spelling.
-  * **Pattern matching:** `(x, y)` in a pattern position desugars to `{ 0 = x, 1 = y }` — handled entirely by the existing record pattern machinery.
-  * **Exhaustiveness:** Tuples are single-constructor (they are records); the existing record exhaustiveness path applies unchanged.
-  * **Tuple sections:** `(, e)` is sugar for a record extension expression with a hole at position `0`: effectively `\x => { 0 = x, 1 = e }`. Holes are filled left-to-right by freshly introduced lambda parameters. This is record-update/extension sugar, not a separate lambda-introduction rule. Multiple holes introduce one parameter each, still left-to-right.
-  * **Performance:** Because tuples lower to row-typed anonymous records, the C backend can lay them out as flat structs by offset rather than heap-allocated dictionaries — identical to the nominal record FBIP path. No per-arity primitive type or hardcoded typeclass instances are required.
-  * **No new Core nodes needed:** `CTuple` / `VTuple` are not required. Surface tuple syntax elaborates entirely to existing `CRecord` / `VRecord` with integer keys.
+### 📅 Phase 11: Surface Syntax Completion (Deferred from Phase 9)
+* **Objective:** Layer back the surface-syntax features that were deferred to unblock Phase 10. All items in this phase are purely front-end (lexer/parser/elaborator); the Phase 10 C backend is unaffected.
 * **Tasks:**
-  * [ ] Add `()` / `(e1, e2, …)` expression syntax to the lexer/parser, desugaring to record literals with integer field labels.
-  * [ ] Add `(T1, T2, …)` type syntax, desugaring to row types with integer field labels. Add `TUnit` as an alias for the empty row type.
-  * [ ] Add `(p1, p2, …)` pattern syntax, desugaring to record patterns with integer field labels.
-  * [ ] Add tuple section parsing: holes (`,` without an expression) in a tuple literal introduce lambda parameters. Desugar in the elaborator to record-extension lambdas.
-  * [ ] Confirm row unifier and pattern exhaustiveness checker handle integer-labelled rows correctly (no new logic expected, but add regression fixtures).
-  * [ ] Add golden fixtures for tuple construction, deconstruction, unit, and tuple sections.
-
-### 📅 Phase 10: Existentials & GADTs
-* **Objective:** Introduce Existential quantification (`exists a.`) and Generalized ADT semantics, expanding Lithic into rich data encapsulation.
-
-### 📅 Phase 11: Module System
-* **Objective:** Support multi-file projects, imports, exports, and namespace resolution.
+  * [ ] Multi-argument multi-clause equations using record-pattern tuple scrutinee (9F follow-on).
+  * [ ] Guard syntax on function equations (`| guard => expr`) with ordered fall-through semantics, lowered to decision trees.
+  * [ ] Pattern-headed equations desugared to `case` while preserving source spans.
+  * [ ] Local function-equation syntax with shared-name clauses.
+  * [ ] Full declaration grouping semantics at module scope (`def`/`let`, multi-clause, grouped signature association).
+  * [ ] List / Sequence type and `::` cons syntax (was Phase 9.5):
+    * `::` right-associative infix cons; `[]` empty list literal; `[a, b, c]` sugar desugaring to `::` chains.
+    * `List a` type constructor and `TList` AST node.
+    * Pattern matrix exhaustiveness for the `::` / `[]` closed two-constructor universe.
+    * Evaluator `VList` or cons-cell value representation.
+  * [ ] Tuples and tuple sections (was Phase 9.6):
+    * `(e1, e2)` / `(T1, T2)` / `(p1, p2)` desugar to row-typed integer-labelled records.
+    * `()` unit as empty record alias.
+    * Tuple section holes introduce lambda parameters (left-to-right).
+  * [ ] Future lexical enhancements: floats without integer part, scientific notation, multi-line strings, character literals.
 
 ### Planned Surface Syntax Addendum: Function Clauses and Guards
-The following user-facing forms are target surface syntax for future phases and are roadmap commitments (not implemented in the current parser/runtime):
+The following user-facing forms are target surface syntax for Phase 11 and are roadmap commitments (not implemented in the current parser/runtime):
 
-```haskell
+```
 isOdd n
   | n % 2 == 0 => False
   | otherwise => True
 ```
 
-```haskell
-isEmpty :: [a] -> Bool
+```
+isEmpty : List a -> Bool
 isEmpty [] = True
 isEmpty _ = False
 ```
@@ -337,7 +339,23 @@ Design constraints for implementation:
 3. Pattern-headed equations must lower to a single internal match structure that shares exhaustiveness/redundancy analysis with `case`.
 4. Diagnostics must point to clause-local spans (pattern head, guard, or RHS), not only declaration-level spans.
 
-### 📅 Phase 12: Numeric Capabilities & Operator Overloading
+### 📅 Phase 12: Module System
+* **Objective:** Support multi-file projects, imports, exports, and namespace resolution.
+
+### 📅 Phase 13: Existentials & GADTs
+* **Objective:** Introduce Existential quantification (`exists a.`) and Generalized ADT semantics, expanding Lithic into rich data encapsulation.
+
+### 📅 Phase 14: Linear Types, FBIP & C Backend Upgrade
+* **Objective:** Upgrade the type system with linear/ownership tracking and upgrade the C backend from malloc-and-leak to zero-cost in-place mutation. This phase delivers the "Mode B" nominal struct path and makes FBIP mutations provably safe.
+* **Tasks:**
+  * [ ] Upgrade `Env` Reader to a consumable State/Resource tracker enforcing exact-once usage.
+  * [ ] Add nominal record type declarations (`type Point = { x : Int, y : Int }`) and lower to static C structs with known byte offsets.
+  * [ ] Upgrade `RecUpdate` codegen: prove unique reference (RC=1) and emit direct in-place C pointer mutation.
+  * [ ] Implement the full FBIP pipeline for deep lens updates (`record.{ x.y := val }` → zero-copy C assignment chain).
+  * [ ] Implement bidirectional FFI: call C functions from Lithic with explicit `foreign import` declarations.
+  * [ ] Upgrade memory model from malloc-and-leak to arena or reference-counted allocation where linear proof is not available.
+
+### 📅 Phase 15: Numeric Capabilities & Operator Overloading
 * **Objective:** Generalize arithmetic from fixed primitive checks to a constraint-driven numeric capability model.
 * **Tasks:**
   * [ ] Introduce capability constraints for arithmetic operators (initially unary minus and subtraction).
@@ -354,14 +372,7 @@ Design constraints for implementation:
 * **Future capability domains:** Equality/ordering, pretty-printing/serialization, collection-like abstractions, and effect capabilities.
 * **Design principle:** No implicit magic widening; defaults must be explicit and documented once the constraint solver exists.
 
-### 📅 Phase 13: Linear Types & FBIP
-* **Objective:** Upgrade the `Env` Reader to a consumable State/Resource tracker to enforce exact-once usage for deterministic memory management and safe in-place mutation.
-
-### 📅 Phase 14: C Code Generation & FFI
-* **Objective:** Lower the fully zonked, typed AST into standard C, proving the zero-runtime concept.
-* **Tasks:** Implement a bidirectional Foreign Function Interface (FFI) to call C libraries directly from Lithic.
-
-### 📅 Phase 15: IO Effect Capability Layer
+### 📅 Phase 16: IO Effect Capability Layer
 * **Objective:** Surface Lithic's Bluefin-style capability-passing effect model to user programs so effectful IO is expressible without a monadic wrapper.
 * **Design notes:**
   * Lithic does not use an `IO` monad. Instead, effects are tracked via row polymorphism in the type system: `read :: { io } String` means `read` requires the `io` capability in scope.
@@ -369,7 +380,7 @@ Design constraints for implementation:
   * The REPL and top-level `main` entry point are implicitly given the full capability set; programmer-defined functions must declare their required capabilities explicitly.
   * Standard capabilities planned for initial slice: `io` (console read/write), `file` (filesystem), `net` (network sockets), `rand` (random number generation).
   * Pure functions (no capability row requirements) compile identically to today's pure Core expressions.
-  * This is architecturally compatible with Phase 13 (linear types): a capability handle could carry linearity to prevent aliasing of stateful resources.
+  * This is architecturally compatible with Phase 14 (linear types): a capability handle could carry linearity to prevent aliasing of stateful resources.
 * **Tasks:**
   * [ ] Define capability row kind and integrate it with the existing row polymorphism infrastructure.
   * [ ] Add `{ cap1, cap2 } ReturnType` surface syntax for capability-annotated function types.
@@ -378,7 +389,7 @@ Design constraints for implementation:
   * [ ] Thread the REPL's top-level capability environment through the evaluator.
   * [ ] Add golden fixtures for capability-annotated function types and simple IO programs.
 
-### 📅 Phase 16: Tooling Ecosystem (LSP & Debugger)
+### 📅 Phase 17: Tooling Ecosystem (LSP & Debugger)
 * **Objective:** Elevate Lithic to a production-ready language with a first-class VSCode developer experience.
 * **Incremental Compilation Strategy (LSP-critical):**
   * LSP features require error-tolerant whole-program semantic analysis, not fail-fast compilation.
