@@ -1,5 +1,24 @@
 # Revision history for lithic
 
+## 0.9.9.0 -- 2026-05-17 (Phase 9H: Core Decl Groups + Persistent REPL Environment)
+
+* H1 — Core/Elaborator declaration-aware boundary:
+	* `CoreDecl` and `CoreTopLevel` added to `Compiler.AST.Core`.
+	* `elabTopLevel` and `elabDecl` added to `Compiler.Elaborator`.
+	* `DeclSig` lowers to `CDeclSig`; `DeclDef` with a named binder lowers to `CDeclDef`.
+	* Non-variable top-level binders produce an explicit elaboration diagnostic.
+	* `getCoreDeclSpan` accessor added alongside existing `getCoreSpan`/`getCorePatternSpan`.
+* H2 — Persistent REPL type environment:
+	* REPL now threads a persistent `Env` through the loop via local state (no new effect handle).
+	* Input is routed through `parseTopLevel` instead of `runParser`.
+	* Named definitions (`f x = body`) accepted, type-inferred, generalized, and persisted in env.
+	* Signature-only declarations acknowledged but not yet persisted (deferred to a follow-up slice).
+	* Parse/lex/type errors do not corrupt the previously accepted environment.
+* Tests:
+	* `Test.Phase9HScaffold` filled in with 5 H1 elaboration unit tests covering expression path,
+	  signature, named definition, non-variable binder rejection, and lambda body lowering.
+* Haddock typos fixed in `Compiler.Elaborator` ("singatures", "requireing").
+
 ## 0.9.8.0 -- 2026-05-17 (Phase 9G Where Blocks + Roadmap Restructure)
 
 * Phase 9G: `where` blocks on equation-style top-level declarations.

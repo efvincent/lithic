@@ -3,7 +3,7 @@ module Compiler.AST.Core where
 import Data.Text (Text)
 import GHC.Generics (Generic)
 
-import Compiler.AST (Literal, Span)
+import Compiler.AST (Literal, Span, Type)
 
 -- | Core patterns for the Phase 8 evaluator subset
 data CorePattern
@@ -27,6 +27,19 @@ data CoreExpr
   | CSelect  Span CoreExpr Text
   deriving (Show, Eq, Generic)
 
+-- | Core declaration form for declaration-aware elaboration.
+data CoreDecl
+  = CDeclDef Span Text CoreExpr
+  | CDeclSig Span Text Type
+  deriving (Show, Eq, Generic)
+
+-- | Core top-level node.
+data CoreTopLevel
+  = CTDecl CoreDecl
+  | CTExpr CoreExpr
+  deriving (Show, Eq, Generic)
+
+-- | Extract the source span from a core pattern
 getCorePatternSpan :: CorePattern -> Span
 getCorePatternSpan = \case
     CPVar sp _       -> sp
@@ -35,6 +48,7 @@ getCorePatternSpan = \case
     CPVariant sp _ _ -> sp
     CPRecord sp _    -> sp
 
+-- | Extract the source span from a core expression.
 getCoreSpan :: CoreExpr -> Span
 getCoreSpan = \case
   CVar sp _       -> sp
@@ -46,3 +60,8 @@ getCoreSpan = \case
   CVariant sp _ _ -> sp
   CRecord sp _    -> sp
   CSelect sp _ _  -> sp
+
+-- | Extract the source span from a core declaration.
+getCoreDeclSpan :: CoreDecl -> Span
+getCoreDeclSpan (CDeclDef sp _ _) = sp
+getCoreDeclSpan (CDeclSig sp _ _) = sp

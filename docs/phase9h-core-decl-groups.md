@@ -1,6 +1,6 @@
 # Phase 9H Scaffold: Core Decl Groups + Persistent REPL Environment
 
-Status: Scaffolded (2026-05-17)
+Status: H1 + H2 first slice implemented (2026-05-17)
 Branch: feat/phase9h-core-decl-groups
 
 ## Scope
@@ -40,6 +40,8 @@ Suggested first slice:
 2. Add elaboration entrypoints for top-level forms (declaration-aware wrapper around current expression elaboration).
 3. Keep current expression path stable to avoid test churn during initial scaffold landing.
 
+**Implemented (2026-05-17):** `CDeclDef`, `CDeclSig`, `CoreTopLevel`, `getCoreDeclSpan` added to `AST.Core`. `elabTopLevel` and `elabDecl` added to `Elaborator`.
+
 ## H2: Persistent REPL Environment
 
 Goal: submitting one declaration in the REPL should affect subsequent submissions.
@@ -56,6 +58,8 @@ Suggested first slice:
 1. Route input through top-level parsing path.
 2. Distinguish declaration submissions from expression submissions.
 3. Thread persistent bindings through loop state without blocking UI event flow.
+
+**Implemented (2026-05-17):** REPL now parses via `parseTopLevel`, threads `Env` as local state through the loop, persists named definitions, and survives error submissions without corrupting existing environment.
 
 ## Test Scaffold Plan
 
