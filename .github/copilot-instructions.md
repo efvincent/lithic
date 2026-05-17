@@ -9,6 +9,26 @@
 - Executable entrypoint is `app/Main.hs`.
 - Current executable path launches a Brick TUI on the main thread and runs the REPL/compiler loop on a background green thread.
 
+## Instructing the User on Code Changes
+
+- changes should be scoped logically. e.g. only instruct to change a whole function if the whole function has significant changes. Otherwise, try to isolate changes to a block like individual case block, or a `then` clause, etc. Give enough surrounding context so I can find the spot to change
+- changes should be well formatted Haskell with syntax highlighting in a Haskell code block.
+- you should examine the current state of the file being modified and any files that are dependencies and use correct module, type, and function names.
+- make no assumptions about current state of code, read acutal state of code.
+- make sure to also add/update/create haddock style comment documentation on modules, types, and functions, and also where complex logic would dictate additional comments for clarity / explanation.
+- you never make changes in `src` directory, unless I explicitly request you make an exception, and that exception would be in effect for the request that made the exception ONLY.
+
+## End of Phase checkpoint procedure
+
+- you only change documentation (in the `docs` folder, or README.md or CHANGELOG.md). You direct me to make code changes using the patch format section above as guidance.
+- audit documentation for accuracy
+- bump version number appropriately
+- make a change log entry as needed
+- perform a complete code review
+- determine what new tests need to be added if any, and add them, and review results
+- after new tests pass and code review completes, check in and PR the branch
+- await findings
+
 ## Core Capabilities and Architecture
 
 Keep phases highly decoupled and preserve clear subsystem boundaries.

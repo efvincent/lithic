@@ -48,8 +48,10 @@ In the REPL:
     where y = x
   ```
 - Guarded equations and multi-argument clause grouping remain pending.
+- Top-level declarations entered in the REPL are type-checked and persisted across subsequent submissions (Phase 9H). Example: enter `id x = x`, then `id 1` — the second expression resolves using the persisted binding. Signature-only declarations are acknowledged but not yet persisted.
 - Phase-7 behavior: case exhaustiveness and unreachable-branch checks are enforced for both finite constructor universes and the current open-universe cases supported by the pattern analysis.
-- Successful input is rendered as two lines: `[AST] <show ast>` followed by `[Type] <show type>`.
+- Successful expression input is rendered as two lines: `[AST] <show ast>` followed by `[Type] <show type>`.
+- Successful declaration input is rendered as `[Decl] <name>` and then `[Type] <show type>` for persisted definitions, or `[Decl] <name> (signature accepted; persistence deferred in this slice)` for signature-only declarations.
 - Lexing, parsing, and type errors are shown inline in the same pane.
 - Press Enter to submit the current editor contents.
 - Enter `:quit` or press Ctrl-C to exit the session.

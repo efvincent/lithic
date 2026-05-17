@@ -1,6 +1,6 @@
 cabal-version:      3.4
 name:               lithic
-version:            0.9.8.0
+version:            0.9.9.0
 build-type:         Simple
 license:            NONE
 author:             Eric Vincent (arch)
@@ -67,6 +67,7 @@ test-suite lithic-test
                     , Test.Elaborator
                     , Test.Evaluator
                     , Test.ParserDeclarations
+                    , Test.Phase9HScaffold
     type:             exitcode-stdio-1.0
     hs-source-dirs:   test
     main-is:          Main.hs

@@ -1,4 +1,5 @@
-{-# OPTIONS_GHC -Wno-incomplete-patterns #-}
+-- | Surface-to-Core elaboration entry points.
+-- Includes expression elaboration plus Phase 9H top-level declaration routing.
 module Compiler.Elaborator where
 
 import Data.Text (Text)
@@ -12,6 +13,28 @@ data ElabError = MkElabError
   { msg :: !Text
   , span :: !Span
   } deriving (Show, Eq, Generic)
+
+-- | Elaborate a surface top-level node into a core top-level node
+elabTopLevel :: TopLevel -> Either ElabError CoreTopLevel
+elabTopLevel = \case
+  TExpr e -> CTExpr <$> elabExpr e
+  TDecl d -> CTDecl <$> elabDecl d
+
+-- | Elaborate a surface declaration into a core declaration.
+-- Phase 9H first slice supports named definitions and signatures.
+elabDecl :: Decl -> Either ElabError CoreDecl
+elabDecl = \case
+  DeclSig sp name ty ->
+    Right (CDeclSig sp name ty)
+  DeclDef sp pat rhs ->
+    case pat of
+      PVar _ name -> do
+        crhs <- elabExpr rhs
+        Right (CDeclDef sp name crhs)
+      _ ->
+        elabFail (getPatternSpan pat)
+          "Top-level declaration elaboration currently requires a named binder."
+    
 
 -- | Elaborate a surface expression into a core expression
 elabExpr :: Expr -> Either ElabError CoreExpr
@@ -67,12 +90,14 @@ elabPattern = \case
     cfields <- traverse (\(label, p) -> (label,) <$> elabPattern p) fields
     Right $ CPRecord sp cfields
 
+-- | Elaborate one case branch pair.
 elabBranch :: (Pattern, Expr) -> Either ElabError (CorePattern, CoreExpr)
 elabBranch (pat, body) = do
   cpat <- elabPattern pat 
   cbody <- elabExpr body
   Right (cpat, cbody)
 
+-- | Collect fields from nested record extensions, requiring a closed empty-record tail.
 collectRecordFields :: Expr -> Either ElabError ([(Text, Expr)])
 collectRecordFields = go []
   where

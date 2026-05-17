@@ -227,6 +227,7 @@ Status: Completed in 0.9.3.0 documentation milestone.
   * Phase 9E (implemented slice): adds a bounded layout preprocessing pass (`runLayout`) between the lexer and the parser. The current implementation powers layout-delimited `case` branches and grouped local `let` clauses, while declaration-group features remain follow-up work.
   * Phase 9F first slice (complete): single-argument multi-clause top-level function equations. Parser collects same-name arity-1 clauses and lowers them to a single `DeclDef` whose RHS is a lambda over a fresh argument variable with a `case` dispatch over the clause list.
   * Phase 9G (complete): `where` blocks on equation-style top-level declarations. Layout opens a block after `TokWhere`; bindings desugar to nested `Let` nodes via `wrapBodyWithWhere`.
+  * Phase 9H (complete): Core/Elaborator now carry top-level declarations and the REPL persists accepted named definitions across submissions. Signature-only declarations are acknowledged but remain non-persistent in this first slice.
   * **Restructuring note (May 2026):** The remaining Phase 9 syntax tasks (multi-arg multi-clause, guards, pattern-headed equations, lists, tuples, local function-equation syntax) are **deferred to Phase 11** so Phase 10 (early C code generation) can be reached without blocking on surface-syntax completeness. The two remaining Phase 9 tasks required as a Phase 10 prerequisite are: Core/Elaborator top-level declaration groups and REPL environment persistence.
 * **Tasks:**
   * [ ] Add syntax highlighting, stronger multi-line editing ergonomics, better history/navigation behavior, and tighter evaluator-aware feedback.
@@ -242,8 +243,8 @@ Status: Completed in 0.9.3.0 documentation milestone.
   * [x] Add parser support for grouped local `let` clauses with one trailing `in`, delimited by layout-inserted `TokVirtSemi` separators.
   * [x] Add parser support for `where` blocks on equation-style declarations (Phase 9G).
   * [x] Define and implement lowering for `where` blocks to nested `Let` nodes with source-span preservation.
-  * [ ] **[Phase 10 prerequisite]** Extend Core AST and Elaborator to represent top-level declaration groups (named functions, mutual recursion groups).
-  * [ ] **[Phase 10 prerequisite]** Extend the REPL evaluator loop to maintain a persistent top-level environment across submissions.
+  * [x] **[Phase 10 prerequisite]** Extend Core AST and Elaborator to represent top-level declaration groups (named functions, mutual recursion groups).
+  * [x] **[Phase 10 prerequisite]** Extend the REPL evaluator loop to maintain a persistent top-level environment across submissions.
   * [ ] **[Deferred to Phase 11]** Multi-argument multi-clause equations using record-pattern tuple scrutinee.
   * [ ] **[Deferred to Phase 11]** Add guard syntax on function equations (Haskell-style guard lists) and lower to decision trees.
   * [ ] **[Deferred to Phase 11]** Add pattern-headed function equations and desugar to `case` while preserving source spans.
