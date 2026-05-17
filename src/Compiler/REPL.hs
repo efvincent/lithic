@@ -113,7 +113,7 @@ replLoop term st = go (MkEnv [])
                   pure updatedEnv
 
             _ -> do
-              term.output "Parse Error: top-level declaration currently requires a variable binder."
+              term.output "Error: top-level declaration currently requires a variable binder."
               pure env
 
 -- | A basic IO implementation of the Terminal effect to get us started
