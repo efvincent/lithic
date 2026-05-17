@@ -67,6 +67,7 @@ test-suite lithic-test
                     , Test.Elaborator
                     , Test.Evaluator
                     , Test.ParserDeclarations
+                    , Test.Phase9HScaffold
     type:             exitcode-stdio-1.0
     hs-source-dirs:   test
     main-is:          Main.hs
