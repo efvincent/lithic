@@ -12,8 +12,8 @@ import Compiler.Lexer (Token(..), TokenClass(..), runLexer)
 import Compiler.Parser (parseTopLevel)
 
 -- | Phase 9 parser declaration coverage.
--- Includes `def`, signature forms, single-clause equations, and Phase 9F
--- first-slice single-argument multi-clause equations.
+-- Includes `def`, signature forms, single-clause equations, Phase 9F
+-- single-argument multi-clause equations, and Phase 9G `where` blocks.
 parserDeclarationsUnitTests :: TestTree
 parserDeclarationsUnitTests =
   testGroup "Phase 9 Parser Declaration Baseline"
@@ -77,8 +77,28 @@ parserDeclarationsUnitTests =
     , testCase "pattern-headed equation is currently rejected" $
         expectTopLevelFailure "x = 1\ny = 2"
 
-    , testCase "where clause in declaration is currently rejected" $
-        expectTopLevelFailure "f x = y where y = 1"
+    , testCase "where block in equation declaration desugars to let (Phase 9G)" $
+        expectTopLevelDeclSuccess "f x = y where y = 1"
+
+    , testCase "where block with indented bindings desugars correctly" $
+        expectTopLevelDeclSuccess "f x = y\n  where y = x"
+
+    , testCase "where block with multiple bindings" $
+        expectTopLevelDeclSuccess "f x = a\n  where\n    a = x\n    b = 1"
+
+    , testCase "where block on multi-clause equation" $
+        expectTopLevelDeclSuccess "not True = False\nnot False = True\n  where dummy = 1"
+
+    , testCase "where is not yet supported on def declarations" $
+        expectTopLevelFailure "def f = 1 where y = 2"
+
+    , testCase "where block with type-annotated binding" $
+        expectTopLevelDeclSuccess "f x = y\n  where y : Int = 1"
+
+    , testCase "where token in expression position produces explicit diagnostic" $
+        expectTopLevelFailureMessage
+          "not valid in expression position"
+          "where"
 
     , testCase "expression-only input still parses as top-level expression" $
         expectTopLevelExprSuccess "let x = 1 in x"
