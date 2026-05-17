@@ -5,38 +5,64 @@ module Test.Phase9HScaffold
   ( phase9HScaffoldUnitTests
   ) where
 
-import qualified Data.IntMap.Strict as IM
 import qualified Data.Text as T
 
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (Assertion, assertFailure, testCase)
 
+import qualified Data.IntMap.Strict as IM
+
 import Bluefin.Eff (runPureEff)
-import Bluefin.Exception (try)
-import Bluefin.Reader (runReader)
-import Bluefin.State (evalState)
+import Bluefin.Eff ((:>))
+import Bluefin.State (State, evalState, get, modify, put, runState)
 
 import Compiler.AST
 import Compiler.AST.Core
 import Compiler.Elaborator (ElabError(..), elabTopLevel)
-import Compiler.TypeChecker
-  ( Env(..), TCState(..), TypeError(..)
-  , generalize, infer, zonk
-  )
+import Compiler.REPL (Terminal(..), replLoop)
+import Compiler.TypeChecker (TCState(..))
 
 -- | A placeholder source span used to construct synthetic AST nodes in tests.
 sp0 :: Span
 sp0 = MkSpan 1 1 1 1
 
--- | Run type inference in a minimal pure effect stack.
--- Equivalent to the check path inside @handleDeclSubmission@ but without
--- the Brick/IO handles, so it is safe to call from pure unit tests.
-runTC :: Env -> Expr -> Either TypeError Type
-runTC env expr = runPureEff $
-  evalState (MkTCState 0 IM.empty) $ \st ->
-    try $ \ex ->
-      runReader env $ \envHandle ->
-        infer st envHandle ex expr
+-- | Run a scripted REPL session and capture output lines in order.
+runReplSession :: [T.Text] -> [T.Text]
+runReplSession inputs =
+  runPureEff $
+    fmap snd $
+      runState [] $ \outputSt ->
+        evalState inputs $ \inputSt ->
+          evalState (MkTCState 0 IM.empty) $ \tcSt ->
+            replLoop (scriptedTerminal inputSt outputSt) tcSt
+
+-- | A pure terminal used to exercise the real REPL loop in tests.
+scriptedTerminal :: (ins :> es, outs :> es) => State [T.Text] ins -> State [T.Text] outs -> Terminal es
+scriptedTerminal inputSt outputSt = MkTerminal
+  { prompt = \_ -> do
+      pending <- get inputSt
+      case pending of
+        [] -> pure Nothing
+        next : rest -> do
+          put inputSt rest
+          pure (Just next)
+  , output = \msg ->
+      modify outputSt (<> [msg])
+  }
+
+-- | Assert that each expected substring appears in order across the output log.
+expectOutputContainsInOrder :: [T.Text] -> [T.Text] -> Assertion
+expectOutputContainsInOrder expected outputs =
+  go expected outputs
+  where
+    go [] _ = pure ()
+    go _ [] =
+      assertFailure
+        ("Expected output sequence not found. Remaining needles: " <> show expected
+          <> "; full output: " <> show outputs)
+    go needles@(needle : rest) (line : remaining)
+      | needle `T.isInfixOf` line = go rest remaining
+      | otherwise = go needles remaining
 
 phase9HScaffoldUnitTests :: TestTree
 phase9HScaffoldUnitTests =
@@ -76,38 +102,41 @@ phase9HScaffoldUnitTests =
               "CTDecl (CDeclDef _ \"f\" (CLam ...))"
         ]
 
-    , testGroup "H2: REPL type environment"
-        [ testCase "variable bound in Env resolves to its declared type" $
-            case runTC (MkEnv [("x", TInt sp0)]) (Var sp0 "x") of
-              Right (TInt _) -> pure ()
-              other -> assertFailure ("Expected TInt, got: " <> show other)
+    , testGroup "H2: REPL session behavior"
+        [ testCase "definition submission is visible to the next expression" $
+            expectOutputContainsInOrder
+              [ "[Decl] id"
+              , "[Type] TForall"
+              , "[AST]"
+              , "[Type] TInt"
+              ]
+              (runReplSession ["id x = x", "id 1", ":quit"])
 
-        , testCase "unbound variable in empty Env produces TypeError" $
-            case runTC (MkEnv []) (Var sp0 "y") of
-              Left _err -> pure ()
-              Right ty  -> assertFailure ("Expected TypeError, got type: " <> show ty)
+        , testCase "parse error does not corrupt a previously accepted binding" $
+            expectOutputContainsInOrder
+              [ "[Decl] id"
+              , "Parse Error:"
+              , "[AST]"
+              , "[Type] TInt"
+              ]
+              (runReplSession ["id x = x", "let x = 1", "id 1", ":quit"])
 
-        , testCase "identity lambda generalizes to a forall type" $ do
-            let idLam = Lam sp0 (PVar sp0 "x") Nothing (Var sp0 "x")
-            let result = runPureEff $
-                  evalState (MkTCState 0 IM.empty) $ \st ->
-                    try @TypeError $ \ex ->
-                      runReader (MkEnv []) $ \envHandle -> do
-                        rawTy  <- infer st envHandle ex idLam
-                        monoTy <- zonk st rawTy
-                        generalize st (MkEnv []) monoTy
-            case result of
-              Right (TForall _ _ _) -> pure ()
-              Right other -> assertFailure ("Expected forall type, got: " <> show other)
-              Left  err   -> assertFailure ("Expected success, got TypeError: " <> show err)
+        , testCase "type error does not corrupt a previously accepted binding" $
+            expectOutputContainsInOrder
+              [ "[Decl] id"
+              , "Type Error:"
+              , "[AST]"
+              , "[Type] TInt"
+              ]
+              (runReplSession ["id x = x", "bad y = 1 - True", "id 1", ":quit"])
 
-        , testCase "binding persisted in Env enables application to type-check" $
-            let idTy  = TArrow sp0 (TInt sp0) (TInt sp0)
-                env   = MkEnv [("id", idTy)]
-                expr  = App sp0 (Var sp0 "id") (Lit sp0 (LInt 1))
-            in case runTC env expr of
-                 Right (TInt _) -> pure ()
-                 other -> assertFailure ("Expected TInt, got: " <> show other)
+        , testCase "signature-only declaration is acknowledged but not persisted" $
+            expectOutputContainsInOrder
+              [ "[Decl] id (signature accepted; persistence deferred in this slice)"
+              , "[AST]"
+              , "Type Error: Unbound variable: id"
+              ]
+              (runReplSession ["id : Int", "id", ":quit"])
         ]
     ]
 

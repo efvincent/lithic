@@ -217,11 +217,11 @@ Status table for planned declaration forms:
 
 | Form | Target Syntax | Implementation Status | Notes |
 | --- | --- | --- | --- |
-| Minimal top-level def declaration | `def pat = expr` | Implemented (parseTopLevel only) | Requires EOF after declaration; not yet threaded through REPL evaluation environment. |
-| Minimal top-level signature declaration | `ident : Type` | Implemented (parseTopLevel only) | Signature-only declaration parses. Bare `ident : Type` at top level is reserved for this declaration form. |
-| Same-name signature+equation pair | `ident : Type` then `ident = expr` | Implemented (parseTopLevel only) | Lowered in parser to a definition with an annotated RHS; full declaration grouping remains unimplemented. |
-| Function equation (single clause) | `f p1 ... pn = expr` | Implemented (parseTopLevel only) | Lowered by parser to a declaration whose RHS is nested lambdas over equation patterns. |
-| Function equation (multi clause, arity 1) | repeated `f p = e` clauses | Implemented (parseTopLevel only) | Lowered by parser to one `DeclDef` whose RHS is `\$arg0 => case $arg0 of ...`. |
+| Minimal top-level def declaration | `def pat = expr` | Implemented | Parses through `parseTopLevel`; REPL persists accepted named-variable definitions only. |
+| Minimal top-level signature declaration | `ident : Type` | Implemented | Signature-only declaration parses and is acknowledged in the REPL, but persistence is deferred in the current Phase 9H slice. Bare `ident : Type` at top level is reserved for this declaration form. |
+| Same-name signature+equation pair | `ident : Type` then `ident = expr` | Implemented | Lowered in parser to a definition with an annotated RHS; current REPL persistence semantics still follow the resulting named-definition path. |
+| Function equation (single clause) | `f p1 ... pn = expr` | Implemented | Lowered by parser to a declaration whose RHS is nested lambdas over equation patterns; REPL persists the resulting named definition. |
+| Function equation (multi clause, arity 1) | repeated `f p = e` clauses | Implemented | Lowered by parser to one `DeclDef` whose RHS is `\$arg0 => case $arg0 of ...`; REPL persists the resulting named definition. |
 | Function equation (multi clause, arity > 1) | repeated `f p1 ... pn = e` clauses | Not implemented yet | Parser currently reports an explicit diagnostic that multi-argument clause grouping is not supported yet. |
 | Grouped local let clauses | `let` then layout-delimited clause list, single trailing `in` | Implemented | Lowered to ordered nested `Let` nodes with span preservation. |
 | `where` block on equation declaration | `f p = body where name = expr ...` | Implemented (equation-style only) | Bindings are layout-delimited; desugared to nested `Let` nodes wrapping the equation body via `wrapBodyWithWhere`. `def` form deferred. |
@@ -393,6 +393,9 @@ Current REPL-visible categories:
 - Lex error: `Lex Error: <msg>`
 - Parse error: `Parse Error: <msg>`
 - Type error: `Type Error: <msg> at <span>`
+- Successful expression submission: `[AST] <show ast>` then `[Type] <show type>`
+- Successful persisted definition submission: `[Decl] <name>` then `[Type] <show type>`
+- Successful signature-only declaration submission: `[Decl] <name> (signature accepted; persistence deferred in this slice)`
 
 Contract requirements:
 1. Diagnostics carry precise `Span` whenever an originating token/node exists.

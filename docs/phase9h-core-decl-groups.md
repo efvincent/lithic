@@ -61,20 +61,20 @@ Suggested first slice:
 
 **Implemented (2026-05-17):** REPL now parses via `parseTopLevel`, threads `Env` as local state through the loop, persists named definitions, and survives error submissions without corrupting existing environment.
 
-## Test Scaffold Plan
+## Test Coverage
 
 Unit test home:
 
 1. test/Test/Phase9HScaffold.hs (created in this scaffold commit)
 
-Initial target cases (to implement in subsequent commits):
+Implemented coverage (2026-05-17):
 
 1. Declaration group elaborates without regressing existing expression elaboration.
-2. Same-name declaration updates are deterministic.
-3. REPL: declaration in step N is visible in step N+1 expression/type queries.
-4. REPL: parser/type errors do not corrupt previously accepted environment.
+2. REPL: declaration in step N is visible in step N+1 expression/type queries.
+3. REPL: parser/type errors do not corrupt previously accepted environment.
+4. REPL: signature-only declarations are acknowledged but not persisted.
 
-Golden fixture candidates:
+Follow-up candidates:
 
 1. test/fixtures/decl-group-basic.lithic
 2. test/fixtures/repl-persist-basic.lithic
