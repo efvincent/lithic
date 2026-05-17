@@ -270,6 +270,7 @@ Status: Completed in 0.9.3.0 documentation milestone.
 ### 📅 Phase 10: C Code Generation — First Pass
 * **Objective:** Produce a working end-to-end C backend for the monomorphic subset of Lithic programs. This is an intentionally scoped first pass: prove the zero-runtime concept, establish the code generation pipeline, and emit correct C for the programs that can already be expressed and type-checked. Surface-syntax completeness is explicitly deferred; adding new syntax in Phase 11 will not require touching the backend.
 * **Prerequisites:** Phase 9 top-level Core/Elaborator plumbing (named top-level functions in Core; REPL persistent environment). No other Phase 9 deferred items are required.
+* **Status (May 2026):** Phase 10 scaffold started on branch `feat/phase10-c-codegen`; implementation scaffold doc `docs/phase10-c-codegen.md` created to drive the first-pass backend slices.
 * **Scope (in):**
   * Monomorphic programs only — any `TForall` / `TMeta` surviving zonk is a hard codegen error: "program is not fully monomorphic; instantiate before code generation".
   * Primitive types: `Int` → `int64_t`, `Float` → `double`, `String` → `const char*` (null-terminated, immutable), `Bool` → `int` (`0`/`1`).
