@@ -187,7 +187,7 @@ parseTopLevel toks =
 -- | Try to parse the tail of a single function-equation clause:
 -- One or more patterns followed by @=@ and a RHS expression.
 -- Returns @Nothing@ (restoring parser state) when the lookahead does not look
--- like an equation clause, Does NTO consume EOF
+-- like an equation clause. Does NOT consume EOF.
 tryParseClauseTail
   :: forall st ex es. (st :> es, ex :> es)
   => State ParserState st -> Exception ParseError ex -> Eff es (Maybe ([Pattern], Expr))
@@ -325,7 +325,7 @@ lowerEquationClauses nameTok name clauses ex =
 
 -- | If the next token is `TokWhere`, parse the where block and desugar its
 -- bindings into nested `Let` nodes wrapping the declaration's body.
--- Only applies to `DeclDef` nodes; nother top-level forms are returned unchanged
+-- Only applies to `DeclDef` nodes; other top-level forms are returned unchanged.
 parseOptionalWhere
   :: forall st ex es. (st :> es, ex :> es)
   => TopLevel -> State ParserState st -> Exception ParseError ex -> Eff es TopLevel
@@ -389,8 +389,8 @@ applyWhereToTopLevel (TDecl (DeclDef sp lhsPat body)) bindings =
   in TDecl (DeclDef sp' lhsPat body')
 applyWhereToTopLevel tl _ = tl
 
--- | Recursively descend through `Lam` nodes to find the innnermost body,
--- then wrap it with `Let` nodes for each where binding.
+-- | Recursively descend through `Lam` nodes to find the innermost body,
+-- then wrap it with `Let` nodes for each where-binding.
 wrapBodyWithWhere :: Expr -> [(Pattern, Expr, Span)] -> Expr
 wrapBodyWithWhere expr bindings = case expr of
   Lam sp pat mTy inner ->

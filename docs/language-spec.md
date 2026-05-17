@@ -1,8 +1,8 @@
 # Lithic Language Specification (Living Core Spec)
 
 Status: Active living spec for implemented behavior.
-Version: 0.4 (2026-05-16)
-Scope baseline: Parser + current bidirectional checker through Phase 9F first slice.
+Version: 0.5 (2026-05-17)
+Scope baseline: Parser + current bidirectional checker through Phase 9G (`where` blocks).
 
 This document is the normative source for the currently implemented Lithic surface language and static semantics. Where implementation and docs disagree, this spec is the authority to reconcile against.
 
@@ -81,6 +81,7 @@ The lexer recognizes the following core keywords/symbols used by the implemented
 
 - `let`, `def`, `in`
 - `case`, `of`
+- `where`
 - `forall`
 - `True`, `False`
 - `\\`, `fn` (lambda introducers)
@@ -100,6 +101,7 @@ Reserved (not currently implemented):
 
 Note: single-clause equation-style declarations (`name p1 ... pn = expr`) are implemented in `parseTopLevel` as of Phase 9D.
 Note: single-argument multi-clause equations (`f p = e` repeated with same name/arity) are implemented in `parseTopLevel` as of Phase 9F first slice.
+Note: `where` blocks on equation-style top-level declarations are implemented as of Phase 9G.
 
 ### 2.5 Layout Rules (Phase 9E — Complete)
 
@@ -118,10 +120,8 @@ Implementation model:
 
 Layout block triggers (current implementation):
 - After `of` keyword: layout block opened at the column of the first branch pattern.
-- After `let` keyword: conditionally opened when sibling-clause evidence is detected for grouped local `let`.
-
-Planned trigger (not yet implemented):
 - After `where` keyword: layout block opened at the column of the first binding.
+- After `let` keyword: conditionally opened when sibling-clause evidence is detected for grouped local `let`.
 
 Decision (Phase 9E): `|` as an explicit case-branch prefix is retired. Previously branches were written `case e of | p1 => e1 | p2 => e2`. After the layout pass, branches are indented under `of` with no `|` prefix:
 ```
@@ -224,6 +224,7 @@ Status table for planned declaration forms:
 | Function equation (multi clause, arity 1) | repeated `f p = e` clauses | Implemented (parseTopLevel only) | Lowered by parser to one `DeclDef` whose RHS is `\$arg0 => case $arg0 of ...`. |
 | Function equation (multi clause, arity > 1) | repeated `f p1 ... pn = e` clauses | Not implemented yet | Parser currently reports an explicit diagnostic that multi-argument clause grouping is not supported yet. |
 | Grouped local let clauses | `let` then layout-delimited clause list, single trailing `in` | Implemented | Lowered to ordered nested `Let` nodes with span preservation. |
+| `where` block on equation declaration | `f p = body where name = expr ...` | Implemented (equation-style only) | Bindings are layout-delimited; desugared to nested `Let` nodes wrapping the equation body via `wrapBodyWithWhere`. `def` form deferred. |
 | Guarded clause | `f p1 ... pn` then `| guard => expr` lines | Not implemented yet | Guard RHS uses fat arrow to remain consistent with term-level branch delimiters. |
 | Pattern-headed clause (single argument) | `f <pattern> = expr` | Implemented (parseTopLevel only) | Included in Phase 9F first-slice clause grouping and lowered through the same lambda/case path as other arity-1 clauses. |
 | Pattern-headed clause (multi argument) | `f <pattern1> <pattern2> ... = expr` | Not implemented yet | Awaiting the multi-argument clause-group follow-on slice. |

@@ -1,6 +1,43 @@
 # Revision history for lithic
 
-## 0.9.7.0 -- 2026-05-15 (Phase 9F First Slice)
+## 0.9.8.0 -- 2026-05-17 (Phase 9G Where Blocks + Roadmap Restructure)
+
+* Phase 9G: `where` blocks on equation-style top-level declarations.
+	* `TokWhere` added to the lexer as a reserved keyword and layout block trigger.
+	* `runLayout` opens a column-tracked virtual block after `where` (same mechanism as `of`).
+	* `not pending` guard added to the top-level `TokVirtSemi` injection rule to prevent spurious
+	  separators before the first token of any newly-opened layout block (latent bug fix).
+	* `parseOptionalWhere` / `parseWhereBindings` / `applyWhereToTopLevel` / `wrapBodyWithWhere`
+	  added to `Compiler.Parser`.
+	* Where bindings are layout-delimited (`TokVirtSemi` separators, `TokVirtRBrace` close).
+	* Each binding supports an optional type annotation (`name : Type = expr`).
+	* `wrapBodyWithWhere` recursively descends through the `Lam` spine of the equation body
+	  and wraps the innermost expression with `foldr Let` over the where-bindings.
+	* `TokWhere` in expression position produces an explicit diagnostic in `parseNud`.
+	* `def` form does not route through `parseOptionalWhere`; deferred.
+* Tests and fixtures:
+	* New golden fixture: `where-basic` (single-binding where block).
+	* New parser-unit tests: where block inline, with indentation, multiple bindings,
+	  on multi-clause equation, def rejection, type-annotated binding, expression-position error.
+* Documentation sync:
+	* `docs/language-spec.md` v0.5: `where` added to keywords, layout triggers updated,
+	  declaration status table updated, scope baseline updated.
+	* `README.md`: `where` block example added.
+	* `.github/copilot-instructions.md`: Grammar section updated with `where` block form.
+	* `docs/project-plan.md` Phase 9G tasks marked complete.
+* Code quality:
+	* Three comment typos fixed in `Compiler.Parser` (NTO→NOT, nother→Other, innnermost→innermost).
+* Roadmap restructure:
+	* Phase 9 trimmed to two Phase 10 prerequisites (Core/Elaborator top-level groups; REPL
+	  persistent environment). All other Phase 9 deferred syntax tasks explicitly moved to Phase 11.
+	* Phase 10 (new): C Code Generation First Pass — monomorphic programs, malloc-and-leak,
+	  closures as function-pointer+capture struct, structural records as slow-path heap arrays,
+	  variants as tagged C unions, single-file `.c` output.
+	* Phase 11 (new): Surface Syntax Completion — absorbs deferred Phase 9 items plus
+	  former Phase 9.5 (Lists) and Phase 9.6 (Tuples).
+	* Phases 12–17: Module System, Existentials & GADTs, Linear Types + FBIP + C Backend Upgrade,
+	  Numeric Capabilities, IO Effect Capability Layer, Tooling Ecosystem.
+
 
 * Phase 9F first slice: single-argument multi-clause top-level equation grouping.
 	* Parser groups repeated same-name arity-1 equation clauses into a single declaration-level lowering.

@@ -92,6 +92,14 @@ parserDeclarationsUnitTests =
     , testCase "where is not yet supported on def declarations" $
         expectTopLevelFailure "def f = 1 where y = 2"
 
+    , testCase "where block with type-annotated binding" $
+        expectTopLevelDeclSuccess "f x = y\n  where y : Int = 1"
+
+    , testCase "where token in expression position produces explicit diagnostic" $
+        expectTopLevelFailureMessage
+          "not valid in expression position"
+          "where"
+
     , testCase "expression-only input still parses as top-level expression" $
         expectTopLevelExprSuccess "let x = 1 in x"
 

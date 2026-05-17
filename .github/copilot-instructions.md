@@ -93,6 +93,11 @@ Keep phases highly decoupled and preserve clear subsystem boundaries.
     pat  => expr
     pat2 => expr2
   ```
+- **`where` blocks:** layout-delimited bindings attached to equation-style top-level declarations; desugar to nested `let` bindings wrapping the equation body:
+  ```
+  f x = y
+    where y = x
+  ```
 - **Literals:** `42`, `3.14`, `"hello"`, `True`, `False`
 - **Arithmetic:** unary minus (`-x`) and infix subtraction (`x - y`)
 - **Implicit application:** Juxtaposition binds tightly (precedence 30): `f x y` parses as `(f x) y`
