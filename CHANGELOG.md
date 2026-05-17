@@ -17,6 +17,9 @@
 * Tests:
 	* `Test.Phase9HScaffold` filled in with 5 H1 elaboration unit tests covering expression path,
 	  signature, named definition, non-variable binder rejection, and lambda body lowering.
+	* 4 H2 type-environment unit tests added: variable resolution from Env, unbound-variable
+	  TypeError, identity lambda generalization to `forall`, application resolving a persisted binding.
+	* 118 tests passing total.
 * Haddock typos fixed in `Compiler.Elaborator` ("singatures", "requireing").
 
 ## 0.9.8.0 -- 2026-05-17 (Phase 9G Where Blocks + Roadmap Restructure)

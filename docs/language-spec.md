@@ -1,8 +1,8 @@
 # Lithic Language Specification (Living Core Spec)
 
 Status: Active living spec for implemented behavior.
-Version: 0.5 (2026-05-17)
-Scope baseline: Parser + current bidirectional checker through Phase 9G (`where` blocks).
+Version: 0.6 (2026-05-17)
+Scope baseline: Parser + bidirectional checker through Phase 9H (persistent REPL declaration environment).
 
 This document is the normative source for the currently implemented Lithic surface language and static semantics. Where implementation and docs disagree, this spec is the authority to reconcile against.
 
