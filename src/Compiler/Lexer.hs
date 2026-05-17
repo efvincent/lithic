@@ -44,6 +44,7 @@ data TokenClass
   | TokLensMod      -- ^ Record Lens Modification operator `%=`
   | TokCase         -- ^ The `case` keyword
   | TokOf           -- ^ The `of` keyword
+  | TokWhere        -- ^ The `where` keyword
   | TokWildcard     -- ^ The `_` wildcard pattern
   | TokVirtSemi     -- ^ Virtual separator inserted by layout pass
   | TokVirtRBrace   -- ^ Virtual block close inserted by layout pass
@@ -82,6 +83,7 @@ reservedWords = Map.fromList
   , ("of",     TokOf)
   , ("True",   TokTrue)
   , ("False",  TokFalse)
+  , ("where",  TokWhere)
   ]
 
 -- | The core scanning loop.
@@ -298,13 +300,14 @@ runLayout = go False [] Nothing
                 | newLine   = dedent tok.span curCol cols []
                 | otherwise = (cols, [])
               virtuals
-                | newLine, null cols1, isTopLevelClauseHead tok rest = virtualsBase ++ [MkToken TokVirtSemi tok.span]
+                | newLine, null cols1, not pending, isTopLevelClauseHead tok rest = virtualsBase ++ [MkToken TokVirtSemi tok.span]
                 | otherwise = virtualsBase
               cols2
                 | pending   = curCol : cols1
                 | otherwise = cols1
               nextPending
                 | tok.cls == TokOf  = True
+                | tok.cls == TokWhere = True
                 | tok.cls == TokLet = shouldOpenLetLayout curLine rest
                 | otherwise         = False
           in virtuals ++ [tok] ++ go nextPending cols2 (Just curLine) rest
@@ -340,8 +343,15 @@ runLayout = go False [] Nothing
           | t.cls == TokAssign = True
           | otherwise = lineHasAssign ln ts
     
-    -- | Conservative detector for top-level equation heads on a fresh line.
-    -- Only identifier-headed lines are considered declaration candidates.
+    -- Invariant note:
+    -- The top-level clause-head detector is intentionally conservative and tied
+    -- to the currently supported equation-head pattern grammar.
+    --
+    -- If pattern syntax expands (for example: parenthesized heads, record heads,
+    -- or other new starters), update `isClauseHeadToken` and add parser
+    -- regression tests. Otherwise layout may misclassify expression lines as
+    -- declaration heads (or miss valid heads), injecting/removing `TokVirtSemi`
+    -- incorrectly.
     isTopLevelClauseHead :: Token -> [Token] -> Bool
     isTopLevelClauseHead tok ts =
       case tok.cls of

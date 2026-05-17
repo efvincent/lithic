@@ -1,0 +1,2 @@
+f x = y
+  where y = x

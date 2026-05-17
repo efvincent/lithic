@@ -161,9 +161,10 @@ parseTopLevel toks =
                   Just firstClause -> do
                     moreClauses <- gatherAdditionalClauses name st ex
                     topLevel <- lowerEquationClauses t name (firstClause : moreClauses) ex
+                    topLevel' <- parseOptionalWhere topLevel st ex
                     mEnd <- peek st
                     case mEnd of
-                      Just e | e.cls == TokEOF -> pure topLevel
+                      Just e | e.cls == TokEOF -> pure topLevel'
                       Just e -> throw ex (MkParseError "Expected EOF after declaration" e.span)
                       Nothing -> throw ex (MkParseError "Unexpected EOF after declaration" t.span)
                   Nothing -> do
@@ -321,6 +322,81 @@ lowerEquationClauses nameTok name clauses ex =
             ("Multi-argument multi-clause equations are not yet supported; \
              \use a single argument or a case expression")
             nameTok.span
+
+-- | If the next token is `TokWhere`, parse the where block and desugar its
+-- bindings into nested `Let` nodes wrapping the declaration's body.
+-- Only applies to `DeclDef` nodes; nother top-level forms are returned unchanged
+parseOptionalWhere
+  :: forall st ex es. (st :> es, ex :> es)
+  => TopLevel -> State ParserState st -> Exception ParseError ex -> Eff es TopLevel
+parseOptionalWhere topLevel st ex = do
+  mTok <- peek st
+  case mTok of
+    Just t | t.cls == TokWhere -> do
+      _ <- advance st
+      bindings <- parseWhereBindings st ex
+      pure (applyWhereToTopLevel topLevel bindings)
+    _ -> pure topLevel
+
+-- | Parse a layout-delimited sequence of `pat = expr` bindings in a `where` block.
+-- Entries are separated by `TokVirtSemi` and the block is closed by `TokVirtRBrace`.
+parseWhereBindings
+  :: forall st ex es. (st :> es, ex :> es)
+  => State ParserState st -> Exception ParseError ex -> Eff es [(Pattern, Expr, Span)]
+parseWhereBindings st ex = do
+  firstBinding <- parseOneBinding
+  restBindings <- parseMoreBindings []
+  mClose <- peek st
+  case mClose of
+    Just t | t.cls == TokVirtRBrace -> do
+      _ <- advance st
+      pure ()
+    _ -> pure ()
+  pure (firstBinding : restBindings)
+  where
+    parseOneBinding = do
+      pat <- parsePattern st ex
+      let startSp = getPatternSpan pat
+      mTok <- peek st
+      mTy <- case mTok of 
+        Just t | t.cls == TokColon -> do
+          _ <- advance st
+          ty <- parseType st ex
+          pure (Just ty)
+        _ -> pure Nothing
+      expect TokAssign st ex
+      rhs <- parseExpr (precVal PrecLowest) st ex
+      let finalRhs = case mTy of
+            Just ty -> Ann (mergeSpan (getTypeSpan ty) (getSpan rhs)) rhs ty
+            Nothing -> rhs
+      pure (pat, finalRhs, mergeSpan startSp (getSpan finalRhs))
+    
+    parseMoreBindings acc = do
+      mSep <- peek st
+      case mSep of
+        Just t | t.cls == TokVirtSemi -> do
+          _ <- advance st
+          binding <- parseOneBinding
+          parseMoreBindings (binding : acc)
+        _ -> pure (reverse acc)
+
+-- | Apply a list of where-bindings to a `DeclDef` by wrapping its body in
+-- nested `Let` nodes. The first binding becomes the outermost `let`.
+applyWhereToTopLevel :: TopLevel -> [(Pattern, Expr, Span)] -> TopLevel
+applyWhereToTopLevel (TDecl (DeclDef sp lhsPat body)) bindings =
+  let body' = wrapBodyWithWhere body bindings
+      sp'   = mergeSpan sp (getSpan body')
+  in TDecl (DeclDef sp' lhsPat body')
+applyWhereToTopLevel tl _ = tl
+
+-- | Recursively descend through `Lam` nodes to find the innnermost body,
+-- then wrap it with `Let` nodes for each where binding.
+wrapBodyWithWhere :: Expr -> [(Pattern, Expr, Span)] -> Expr
+wrapBodyWithWhere expr bindings = case expr of
+  Lam sp pat mTy inner ->
+    let inner' = wrapBodyWithWhere inner bindings
+    in Lam (mergeSpan sp (getSpan inner')) pat mTy inner'
+  _ -> foldr (\(pat, rhs, clSp) acc -> Let clSp pat rhs acc) expr bindings
 
 -- | Recursively parses the interior fields of a record definition
 -- Handles standard fields separated by commas, and row extensions 
@@ -710,6 +786,9 @@ parseNud tok st ex =
       -- We parse the payload expression at Application precedence
       payload <- parseExpr (precVal PrecApp) st ex
       pure $ Variant (mergeSpan tok.span (getSpan payload)) x payload
+
+    TokWhere ->
+      throw ex (MkParseError "`where` is not valid in expression position" tok.span)
 
     _ -> 
       throw ex (MkParseError ("Unexpected token in expression position: " 

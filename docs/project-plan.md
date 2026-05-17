@@ -226,7 +226,7 @@ Status: Completed in 0.9.3.0 documentation milestone.
   * Phase 9D adds single-clause equation-style top-level declaration parsing (`f p1 ... pn = expr`) lowered through parser-produced lambdas.
   * Phase 9E (implemented slice): adds a bounded layout preprocessing pass (`runLayout`) between the lexer and the parser. The current implementation powers layout-delimited `case` branches and grouped local `let` clauses, while declaration-group features remain follow-up work.
   * Phase 9F first slice (complete): single-argument multi-clause top-level function equations. Parser collects same-name arity-1 clauses and lowers them to a single `DeclDef` whose RHS is a lambda over a fresh argument variable with a `case` dispatch over the clause list.
-  * Remaining work after 9F: multi-argument multi-clause (9F cont.), `where` block parsing (9G), Core/Elaborator declaration-group plumbing, REPL environment persistence.
+  * Remaining work after 9F: multi-argument multi-clause (9F cont.), `where` block parsing (9G, in progress), Core/Elaborator declaration-group plumbing, REPL environment persistence.
 * **Tasks:**
   * [ ] Add syntax highlighting, stronger multi-line editing ergonomics, better history/navigation behavior, and tighter evaluator-aware feedback.
   * [x] Add parser support for initial top-level `def` declaration form (`def p = expr`) and top-level parse routing.
@@ -243,8 +243,10 @@ Status: Completed in 0.9.3.0 documentation milestone.
     * [ ] Phase 9F follow-on: multi-argument multi-clause using record-pattern tuple scrutinee.
   * [ ] Add parser support for local function-equation syntax with shared-name clauses.
   * [x] Add parser support for grouped local `let` clauses with one trailing `in`, delimited by layout-inserted `TokVirtSemi` separators.
-  * [ ] Add parser support for `where` blocks on declarations/equations using layout delimiters (`TokVirtSemi` / `TokVirtRBrace`) and scoped association to the owning declaration group.
-  * [ ] Define and implement lowering for declaration/equation `where` blocks to internal local-binding structure with source-span preservation.
+  * [x] Add parser support for `where` blocks on declarations/equations using layout delimiters (`TokVirtSemi` / `TokVirtRBrace`) and scoped association to the owning declaration group.
+    * Phase 9G first slice: `TokWhere` layout block opens on the next token column (like `of`); `parseOptionalWhere` + `parseWhereBindings` + `wrapBodyWithWhere` desugar bindings to nested `Let` nodes wrapping the equation body. Supported on equation-style top-level declarations only; `def` form deferred.
+    * Fix: `not pending` guard added to top-level `TokVirtSemi` injection to prevent spurious separators before the first token of any newly-opened layout block.
+  * [x] Define and implement lowering for declaration/equation `where` blocks to internal local-binding structure with source-span preservation.
   * [ ] Add guard syntax on function equations (Haskell-style guard lists) and lower to decision trees.
   * [ ] Add pattern-headed function equations and desugar to `case` while preserving source spans.
   * [ ] Extend the REPL evaluator loop to maintain a persistent top-level environment across submissions.
