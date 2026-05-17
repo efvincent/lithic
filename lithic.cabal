@@ -34,6 +34,7 @@ library
     import:           shared
     exposed-modules:  Compiler.AST
                     , Compiler.AST.Core
+                    , Compiler.CGen
                     , Compiler.Lexer
                     , Compiler.Parser
                     , Compiler.PatternMatch
