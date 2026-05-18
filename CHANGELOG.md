@@ -1,5 +1,37 @@
 # Revision history for lithic
 
+## 0.9.10.0 -- 2026-05-18 (Phase 10 C Backend Scaffold)
+
+* Phase 10 C backend scaffold (`Compiler.CGen`):
+	* `Compiler.CGen` emits first-pass function-body scaffolds for all Core forms.
+	* Top-level lambda definitions lower to named C function skeletons with arity comments.
+	* `CApp` emits first-pass call-shape stubs via `cgenCallArg` placeholder helpers.
+	* `CCase` emits a `switch`-based branch skeleton with indexed case labels and pattern/body tags.
+	* `CVariant`, `CRecord`, and `CSelect` emit runtime-helper call placeholders:
+		* `lithic_variant_make(...)`
+		* `lithic_record_make(...)`
+		* `lithic_record_select(...)`
+	* Unified unsupported-body marker: `unsupported(phase10-c2)` across all unimplemented forms.
+	* Removed unused internal binding `cgenCallTarget` (cleanup).
+* Tests (`Test.CGen`):
+	* 8 unit tests asserting C2 scaffold behavior: headers, decl count, signature placeholders,
+	  lambda skeleton shape, case switch skeleton, variant/record/select placeholder emission,
+	  declaration order preservation, and blank-line separator contract.
+	* `Test.Phase9HScaffold` extended to assert REPL C-output contract:
+		* expression success emits explicit `[C]` status line,
+		* declaration success emits `[C]` scaffold block with generated function skeleton.
+
+* Typechecker coverage refinement:
+	* Fixed literal-scrutinee case behavior: known-literal scrutinees narrow branch coverage.
+	* `case True of True => 1` typechecks without requiring a `False` branch.
+	* Non-matching literal-only branches now report `Unreachable pattern branch` (previously non-exhaustive).
+	* Golden fixtures updated to reflect new diagnostic for literal-scrutinee mismatches.
+	* REPL-session regression tests added to lock the `case True of False => 1` → unreachable behavior.
+
+* REPL output contract:
+	* Expression submissions emit a `[C]` status line after `[AST]` and `[Type]`.
+	* Declaration submissions emit a `[C]` block with generated C scaffold text.
+
 ## 0.9.9.0 -- 2026-05-17 (Phase 9H: Core Decl Groups + Persistent REPL Environment)
 
 * H1 — Core/Elaborator declaration-aware boundary:

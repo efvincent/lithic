@@ -9,17 +9,20 @@ import Data.Generics.Labels ()
 import Control.Concurrent.MVar (MVar, takeMVar)
 
 import Brick.BChan (BChan, writeBChan)
+import Bluefin.State (State)
 import Bluefin.Eff ((:>), Eff)
 import Bluefin.Exception (try)
 import Bluefin.Reader (runReader)
 import Bluefin.IO (IOE, effIO)
 
+import Compiler.AST.Core (CoreTopLevel(..))
 import Compiler.AST (Decl(..), Pattern(..), TopLevel(..))
 import Compiler.TUI (TUIEvent(..))
 import Compiler.Lexer (runLexer, LexError(..))
 import Compiler.Parser (ParseError(..), parseTopLevel)
 import Compiler.TypeChecker (infer, generalize, Env(..), TypeError(..), TCState (..), zonk)
-import Bluefin.State (State)
+import Compiler.Elaborator (elabTopLevel, ElabError(..))
+import Compiler.CGen (cgenProgram)
 
 -- | The Terminal effect handle.
 -- Abstracts the UI so we can swap between basic IO and a `brick` TUI seamlessly.
@@ -60,6 +63,21 @@ replLoop term st = go (MkEnv [])
 
               go nextEnv
 
+    emitCodeGen :: TopLevel -> Eff es ()
+    emitCodeGen = \case
+      TExpr _ ->
+        term.output "[C] (expression codegen not yet supported in REPL; declaration-only for now)"
+      tDecl@(TDecl _) ->
+        case elabTopLevel tDecl of
+          Left (MkElabError elabMsg _) ->
+            term.output $ "[CGen Error] " <> elabMsg
+          Right coreTop ->
+            case coreTop of
+              CTDecl coreDecl ->
+                term.output $ "[C]\n" <> cgenProgram [coreDecl]
+              CTExpr _ ->
+                term.output "[C] (expression codegen not yet supported in REPL; declaration-only for now)"
+
     -- Keep expression and declaration handling isolated so declaration
     -- persistence does not leak into parse/lex error paths.
     handleTopLevel :: Env -> TopLevel -> Eff es Env
@@ -77,6 +95,7 @@ replLoop term st = go (MkEnv [])
             pure env
           Right ty -> do
             term.output $ "[Type] " <> T.pack (show ty)
+            emitCodeGen (TExpr ast)
             pure env
 
       TDecl decl ->
@@ -91,6 +110,7 @@ replLoop term st = go (MkEnv [])
         DeclSig _ name _ -> do
           term.output $
             "[Decl] " <> name <> " (signature accepted; persistence deferred in this slice)"
+          emitCodeGen (TDecl decl)
           pure env
 
         DeclDef _ pat rhs ->
@@ -110,6 +130,7 @@ replLoop term st = go (MkEnv [])
                   let updatedEnv = MkEnv ((name, polyTy) : env.bindings)
                   term.output $ "[Decl] " <> name
                   term.output $ "[Type] " <> T.pack (show polyTy)
+                  emitCodeGen (TDecl decl)
                   pure updatedEnv
 
             _ -> do

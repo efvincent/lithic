@@ -64,6 +64,14 @@ expectOutputContainsInOrder expected outputs =
       | needle `T.isInfixOf` line = go rest remaining
       | otherwise = go needles remaining
 
+-- | Assert that one substring appears somewhere in the full output log.
+expectOutputContains :: T.Text -> [T.Text] -> Assertion
+expectOutputContains needle outputs =
+  if needle `T.isInfixOf` T.intercalate "\n" outputs
+    then pure ()
+    else assertFailure
+      ("Expected output to contain: " <> show needle <> "; full output: " <> show outputs)
+
 phase9HScaffoldUnitTests :: TestTree
 phase9HScaffoldUnitTests =
   testGroup "Phase 9H: Core Decl Groups + Elaboration"
@@ -137,6 +145,39 @@ phase9HScaffoldUnitTests =
               , "Type Error: Unbound variable: id"
               ]
               (runReplSession ["id : Int", "id", ":quit"])
+
+        , testCase "literal scrutinee case with matching branch is accepted" $
+            expectOutputContainsInOrder
+              [ "[AST]"
+              , "[Type] TInt"
+              ]
+              (runReplSession ["case True of True => 1", ":quit"])
+
+        , testCase "literal scrutinee case with no matching branch still fails" $
+            expectOutputContainsInOrder
+              [ "[AST]"
+              , "Type Error: Unreachable pattern branch"
+              ]
+              (runReplSession ["case True of False => 1", ":quit"])
+
+        , testCase "expression success emits explicit expression-codegen status" $
+            expectOutputContainsInOrder
+              [ "[AST]"
+              , "[Type] TInt"
+              , "[C] (expression codegen not yet supported in REPL; declaration-only for now)"
+              ]
+              (runReplSession ["1", ":quit"])
+
+        , testCase "declaration success emits generated C scaffold" $
+            let outputs = runReplSession ["id x = x", ":quit"]
+             in do
+              expectOutputContainsInOrder
+                [ "[Decl] id"
+                , "[Type] TForall"
+                ]
+                outputs
+              expectOutputContains "[C]" outputs
+              expectOutputContains "static void lithic_id(void)" outputs
         ]
     ]
 
