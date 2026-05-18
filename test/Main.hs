@@ -2,6 +2,7 @@ module Main where
 
 import Test.Tasty (defaultMain, testGroup)
 
+import Test.CGen (cgenUnitTests)
 import Test.Elaborator (elaboratorUnitTests)
 import Test.Evaluator (evaluatorUnitTests)
 import Test.Golden (discoverGoldenTests)
@@ -15,6 +16,7 @@ main = do
   defaultMain $ testGroup "Lithic Compiler Tests"
     [ goldenTests
     , patternCoverageUnitTests
+    , cgenUnitTests
     , elaboratorUnitTests
     , evaluatorUnitTests
     , parserDeclarationsUnitTests

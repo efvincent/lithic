@@ -70,6 +70,20 @@ classifyNumeric = \case
   TMeta{}  -> NumericMeta
   _        -> NumericNonNumeric
 
+-- | Extract a leteral from a scrutinee expression when known statically.
+scrutineeLiteral :: Expr -> Maybe Literal
+scrutineeLiteral (Lit _ lit) = Just lit
+scrutineeLiteral _ = Nothing
+
+-- | Whether a branch head can matcha known literal scrutinee.
+-- Variable and wildcard binders are treadted as matching.
+patternMatchesLiteral :: Literal -> Pattern -> Bool
+patternMatchesLiteral lit = \case
+  PVar{}      -> True
+  PWildcard{} -> True
+  PLit _ lit' -> lit' == lit
+  _           -> False
+
 --------------------------------
 -- Typechecker implementation
 --------------------------------
@@ -253,12 +267,18 @@ infer st env ex expr =
 
       -- Then run coverage on the refined scrutinee type.
       refinedScrutTy <- force st scrutTy
-      case checkCasePatterns refinedScrutTy (map fst branches) of
+      let branchPats = map fst branches
+      case checkCasePatterns refinedScrutTy branchPats of
         Left (Redundant pat) ->
           throw ex $ MkTypeError "Unreachable pattern branch" (getPatternSpan pat)
-        Left (NonExhaustive ws) -> do
-          let witnessText = T.intercalate ", " (map (T.pack . show) (take 3 ws))
-          throw ex $ MkTypeError ("Non-exhaustive patterns in case. Missing: " <> witnessText) sp
+        Left (NonExhaustive ws) ->
+          case scrutineeLiteral scrutinee of
+            Just lit
+              | any (patternMatchesLiteral lit) branchPats ->
+                  pure ()
+            _ -> do
+              let witnessText = T.intercalate ", " (map (T.pack . show) (take 3 ws))
+              throw ex $ MkTypeError ("Non-exhaustive patterns in case. Missing: " <> witnessText) sp
         Right () -> pure ()
       pure resultTy
 

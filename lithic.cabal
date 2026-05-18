@@ -65,6 +65,7 @@ test-suite lithic-test
     import:           shared
     other-modules:    Test.Golden
                     , Test.PatternCoverage
+                    , Test.CGen
                     , Test.Elaborator
                     , Test.Evaluator
                     , Test.ParserDeclarations
