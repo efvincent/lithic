@@ -270,7 +270,7 @@ Status: Completed in 0.9.3.0 documentation milestone.
 ### 📅 Phase 10: C Code Generation — First Pass
 * **Objective:** Produce a working end-to-end C backend for the monomorphic subset of Lithic programs. This is an intentionally scoped first pass: prove the zero-runtime concept, establish the code generation pipeline, and emit correct C for the programs that can already be expressed and type-checked. Surface-syntax completeness is explicitly deferred; adding new syntax in Phase 11 will not require touching the backend.
 * **Prerequisites:** Phase 9 top-level Core/Elaborator plumbing (named top-level functions in Core; REPL persistent environment). No other Phase 9 deferred items are required.
-* **Status (May 2026):** Phase 10 scaffold started on branch `feat/phase10-c-codegen`; implementation scaffold doc `docs/phase10-c-codegen.md` created to drive the first-pass backend slices.
+* **Status (May 2026):** Phase 10 C2 scaffold merged (branch `feat/phase10-c-codegen`, v0.9.10.0). All Core forms emit compilable placeholder C. Literal-scrutinee coverage fix and REPL `[C]` output also landed. Next slice: `feat/phase10-c2-emission` — replace scaffolding stubs with actual C values, typed function signatures, and `let`-to-local lowering.
 * **Scope (in):**
   * Monomorphic programs only — any `TForall` / `TMeta` surviving zonk is a hard codegen error: "program is not fully monomorphic; instantiate before code generation".
   * Primitive types: `Int` → `int64_t`, `Float` → `double`, `String` → `const char*` (null-terminated, immutable), `Bool` → `int` (`0`/`1`).
@@ -289,7 +289,7 @@ Status: Completed in 0.9.3.0 documentation milestone.
   * Module system / multi-file linking (Phase 12).
   * FFI: calling C from Lithic (deferred to Phase 10b or Phase 14 upgrade).
 * **Tasks:**
-  * [ ] Add `Compiler.CGen` module: entry point `cgenProgram :: [CoreDecl] -> Text`.
+  * [x] Add `Compiler.CGen` module: entry point `cgenProgram :: [CoreDecl] -> Text`. (C2 scaffold complete — all Core forms emit compilable placeholder C; v0.9.10.0)
   * [ ] Implement primitive type mapping (`Int`, `Float`, `String`, `Bool`).
   * [ ] Implement closure layout: generate per-closure capture structs and function pointers.
   * [ ] Implement structural record codegen: heap-allocated field array with string-keyed lookup helper.
