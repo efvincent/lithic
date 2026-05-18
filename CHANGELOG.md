@@ -2,6 +2,37 @@
 
 ## 0.9.9.0 -- 2026-05-17 (Phase 9H: Core Decl Groups + Persistent REPL Environment)
 
+* Phase 10 C2 scaffold expansion (current branch progress):
+	* `Compiler.CGen` now emits first-pass function-body scaffolds for additional Core forms.
+	* Top-level lambda definitions lower to named C function skeletons with emitted arity comments.
+	* `CApp` emits first-pass call-shape stubs via `cgenCallTarget` and `cgenCallArg`.
+	* `CCase` emits a switch-based branch skeleton with indexed case labels and pattern/body tags.
+	* `CVariant`, `CRecord`, and `CSelect` emit runtime-helper call placeholders:
+		* `lithic_variant_make(...)`
+		* `lithic_record_make(...)`
+		* `lithic_record_select(...)`
+	* Normalization pass applied to CGen scaffold diagnostics/comments:
+		* unified unsupported body marker: `unsupported(phase10-c2)`
+		* formatting and Haddock comment cleanup in `Compiler.CGen`
+* Tests:
+	* `Test.CGen` expanded to assert current C2 scaffold behavior:
+		* non-lambda top-level definition rejection path remains explicit,
+		* lambda skeleton + app call-shape emission,
+		* case switch skeleton emission,
+		* variant/record/select runtime-helper placeholder emission.
+	* `Test.Phase9HScaffold` expanded to assert REPL C-output contract:
+		* expression success emits explicit `[C]` status (declaration-only support for now),
+		* declaration success emits `[C]` scaffold output including generated function skeleton text.
+
+* Typechecker coverage refinement:
+	* Fixed literal-scrutinee case behavior so known literal scrutinees narrow coverage checks.
+	* `case True of True => 1` now typechecks as expected, while `case True of False => 1` remains non-exhaustive.
+	* Added regression coverage through REPL-session tests to lock this behavior.
+
+* REPL output contract updates:
+	* Successful expression submissions now emit codegen status lines in addition to `[AST]` and `[Type]`.
+	* Successful declaration submissions now emit a `[C]` block with current generated C scaffold output.
+
 * H1 — Core/Elaborator declaration-aware boundary:
 	* `CoreDecl` and `CoreTopLevel` added to `Compiler.AST.Core`.
 	* `elabTopLevel` and `elabDecl` added to `Compiler.Elaborator`.

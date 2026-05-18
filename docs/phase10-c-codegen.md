@@ -112,3 +112,88 @@ Phase 10 is complete when all of the following hold:
 4. The CLI can write `.c` output for a valid program.
 5. Focused fixtures validate both emitted source shape and `gcc` compilation.
 6. README.md and roadmap docs describe the backend workflow accurately.
+
+## Immediate Next Slice (C1.1)
+
+This is the recommended next coding task for the current branch.
+
+Goal: stabilize the backend scaffold output contract before term-lowering work.
+
+Required code changes (src owned by implementation step):
+
+1. Fix C prelude header spellings and keep include order deterministic.
+2. Preserve scaffold comments so output remains testable while C2 lowering is incomplete.
+3. Keep `cgenProgram` pure and declaration-order preserving.
+
+Prepared tests in this repo now cover:
+
+1. Required prelude headers are present.
+2. Declaration-count comment matches list length.
+3. Signature/definition placeholder comments are emitted.
+
+Validation command for this slice:
+
+```sh
+cabal test lithic-test --test-options='--pattern "CGen Unit Tests"'
+```
+
+Definition of done for C1.1:
+
+1. CGen unit tests pass.
+2. No behavior regressions in existing golden and unit tests.
+3. Docs remain aligned with actual scaffold output.
+
+Status update: complete (header typo fixed; CGen unit tests green).
+
+## Immediate Next Slice (C2.0)
+
+Goal: start declaration-body lowering with a minimal, explicit function skeleton path.
+
+Recommended implementation target (src step):
+
+1. For `CDeclDef name rhs`, emit a C function skeleton for a narrow first shape:
+	`rhs` is a lambda-like value that can map to one generated C function.
+2. Keep unsupported definition shapes explicit via scaffold comments or diagnostics.
+3. Preserve declaration order and current prelude contract.
+
+Current prep tests for this boundary now include:
+
+1. Deterministic declaration ordering.
+2. Single blank-line separator between adjacent declarations.
+
+Validation command for prep coverage:
+
+```sh
+cabal test lithic-test --test-options='--pattern "CGen Unit Tests"'
+```
+
+Definition of done for C2.0 prep handoff:
+
+1. All CGen scaffold unit tests pass.
+2. C2 implementation can add focused tests for function skeleton emission without rewriting existing scaffold tests.
+
+## C2 Scaffold Status (Current)
+
+Current `Compiler.CGen` body-level emission coverage (first-pass placeholders):
+
+1. Top-level lambda definitions emit named C function skeletons (`static void lithic_<name>(void)`).
+2. Terminal forms emit explicit return-path placeholders:
+	- `CLit` emits literal-kind comment + `return;`
+	- `CVar` emits variable comment + `return;`
+3. Compound forms now emit call/control placeholders instead of generic TODO-only comments:
+	- `CApp` emits `target(arg);` shape via `cgenCallTarget` / `cgenCallArg`
+	- `CCase` emits `switch (0)` skeleton with numbered branch stubs
+	- `CVariant` emits `lithic_variant_make(...)`
+	- `CRecord` emits `lithic_record_make(...)`
+	- `CSelect` emits `lithic_record_select(...)`
+
+Normalization policy now used in this slice:
+
+1. Unsupported body forms route through a single marker: `unsupported(phase10-c2)`.
+2. Constructor-specific helper comments remain explicit (`unsupported-call-target`, `unsupported-call-arg`).
+
+Near-term follow-up (post-normalization):
+
+1. Replace `switch (0)` with real discriminant lowering once tag model is finalized.
+2. Introduce concrete value temporaries/ABI for call and record helper stubs.
+3. Wire runtime helper declarations (`lithic_variant_make`, `lithic_record_make`, `lithic_record_select`) into generated prelude or support runtime.

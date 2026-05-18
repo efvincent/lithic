@@ -377,6 +377,9 @@ Current deferred scope:
 - Exhaustiveness/redundancy checks for grouped function-equation clauses.
 - Exhaustiveness/redundancy checks for binder patterns in `let` and lambda parameters.
 
+Implementation note:
+- When a `case` scrutinee is a known literal value, the checker narrows coverage against that observed literal head. This means a branch set such as `case True of True => 1` is accepted without requiring an explicit `False` branch, while `case True of False => 1` still reports non-exhaustiveness.
+
 ### 5.7 Numeric Operators (Stable current policy, Provisional long-term model)
 
 Current behavior:

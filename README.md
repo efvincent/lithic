@@ -39,6 +39,7 @@ In the REPL:
     Ok x => x
     Err _ => 0
   ```
+  Literal scrutinees are also handled directly, so `case True of True => 1` is accepted.
 - Primitive literals currently include `Int`, `Float`, `String`, and `Bool` (`True`/`False`).
 - Prefix unary minus and infix subtraction are supported (`-x`, `x - y`).
 - Top-level declaration parsing (used by the file/golden pipeline) supports Phase 9F first-slice single-argument equation grouping, including pattern-headed arity-1 clauses.
@@ -50,8 +51,8 @@ In the REPL:
 - Guarded equations and multi-argument clause grouping remain pending.
 - Top-level declarations entered in the REPL are type-checked and persisted across subsequent submissions (Phase 9H). Example: enter `id x = x`, then `id 1` — the second expression resolves using the persisted binding. Signature-only declarations are acknowledged but not yet persisted.
 - Phase-7 behavior: case exhaustiveness and unreachable-branch checks are enforced for both finite constructor universes and the current open-universe cases supported by the pattern analysis.
-- Successful expression input is rendered as two lines: `[AST] <show ast>` followed by `[Type] <show type>`.
-- Successful declaration input is rendered as `[Decl] <name>` and then `[Type] <show type>` for persisted definitions, or `[Decl] <name> (signature accepted; persistence deferred in this slice)` for signature-only declarations.
+- Successful expression input is rendered as `[AST] <show ast>`, then `[Type] <show type>`, then an explicit codegen status line (`[C] (expression codegen not yet supported in REPL; declaration-only for now)`).
+- Successful declaration input is rendered as `[Decl] <name>` and then `[Type] <show type>` for persisted definitions, or `[Decl] <name> (signature accepted; persistence deferred in this slice)` for signature-only declarations. Declaration submissions also emit a `[C]` block with the current generated C scaffold.
 - Lexing, parsing, and type errors are shown inline in the same pane.
 - Press Enter to submit the current editor contents.
 - Enter `:quit` or press Ctrl-C to exit the session.
