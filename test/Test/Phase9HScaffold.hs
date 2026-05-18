@@ -156,7 +156,7 @@ phase9HScaffoldUnitTests =
         , testCase "literal scrutinee case with no matching branch still fails" $
             expectOutputContainsInOrder
               [ "[AST]"
-              , "Type Error: Non-exhaustive patterns in case"
+              , "Type Error: Unreachable pattern branch"
               ]
               (runReplSession ["case True of False => 1", ":quit"])
 

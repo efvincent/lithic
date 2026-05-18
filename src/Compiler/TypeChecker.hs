@@ -84,6 +84,19 @@ patternMatchesLiteral lit = \case
   PLit _ lit' -> lit' == lit
   _           -> False
 
+-- | For known literal scrutinees:
+-- 1) non-matching branches are redundant,
+-- 2) branches after the first matching branch are redundant,
+-- 3) exhaustif iff at least one branch matches
+literalCoverageForKnownScrutinee :: Literal ->[Pattern] -> Either Pattern Bool
+literalCoverageForKnownScrutinee lit = go False
+  where
+    go matched [] = Right matched
+    go matched (p:ps)
+      | matched = Left p
+      | patternMatchesLiteral lit p = go True ps
+      | otherwise = Left p
+
 --------------------------------
 -- Typechecker implementation
 --------------------------------
@@ -268,18 +281,24 @@ infer st env ex expr =
       -- Then run coverage on the refined scrutinee type.
       refinedScrutTy <- force st scrutTy
       let branchPats = map fst branches
-      case checkCasePatterns refinedScrutTy branchPats of
-        Left (Redundant pat) ->
-          throw ex $ MkTypeError "Unreachable pattern branch" (getPatternSpan pat)
-        Left (NonExhaustive ws) ->
-          case scrutineeLiteral scrutinee of
-            Just lit
-              | any (patternMatchesLiteral lit) branchPats ->
-                  pure ()
-            _ -> do
+      case scrutineeLiteral scrutinee of
+        Just lit ->
+          case literalCoverageForKnownScrutinee lit branchPats of
+            Left redundantPat ->
+              throw ex $ MkTypeError "Unreachable pattern branch" (getPatternSpan redundantPat)
+            Right True -> pure ()
+            Right False -> do
+              let missing = PLit (getSpan scrutinee) lit
+              let witnessText = T.pack (show missing)
+              throw ex $ MkTypeError ("Non-exhaustive patterns in case. Missing: " <> witnessText) sp
+        Nothing ->
+          case checkCasePatterns refinedScrutTy branchPats of
+            Left (Redundant pat) ->
+              throw ex $ MkTypeError "Unreachable pattern branch" (getPatternSpan pat)
+            Left (NonExhaustive ws) -> do
               let witnessText = T.intercalate ", " (map (T.pack . show) (take 3 ws))
               throw ex $ MkTypeError ("Non-exhaustive patterns in case. Missing: " <> witnessText) sp
-        Right () -> pure ()
+            Right () -> pure ()
       pure resultTy
 
     Variant sp label payload -> do

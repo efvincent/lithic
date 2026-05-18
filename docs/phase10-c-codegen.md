@@ -1,6 +1,6 @@
 # Phase 10 Scaffold: C Code Generation First Pass
 
-Status: scaffold started (2026-05-17)
+Status: C2 scaffold complete (2026-05-18) — all Core forms emit compilable placeholder C
 Branch: feat/phase10-c-codegen
 
 ## Scope
@@ -181,7 +181,7 @@ Current `Compiler.CGen` body-level emission coverage (first-pass placeholders):
 	- `CLit` emits literal-kind comment + `return;`
 	- `CVar` emits variable comment + `return;`
 3. Compound forms now emit call/control placeholders instead of generic TODO-only comments:
-	- `CApp` emits `target(arg);` shape via `cgenCallTarget` / `cgenCallArg`
+	- `CApp` currently emits a compile-safe placeholder call (`lithic_unsupported_fn(0)`) plus TODO marker
 	- `CCase` emits `switch (0)` skeleton with numbered branch stubs
 	- `CVariant` emits `lithic_variant_make(...)`
 	- `CRecord` emits `lithic_record_make(...)`

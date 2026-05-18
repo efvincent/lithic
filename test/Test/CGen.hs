@@ -45,15 +45,15 @@ cgenUnitTests =
           T.isInfixOf "/* unsupported(phase10-c2): expected top-level lambda */" out
             @? "non-lambda top-level definitions should stay explicit"
 
-    , testCase "lambda definition emits function skeleton and app call shape" $
+    , testCase "lambda definition emits function skeleton and app placeholder shape" $
         let out = cgenProgram [defAppDecl]
          in do
           T.isInfixOf "static void lithic_applyFn(void) {" out
             @? "lambda definition should emit a named C function"
           T.isInfixOf "/* arity: 1 */" out
             @? "single lambda parameter should report arity 1"
-          T.isInfixOf "lithic_f(x);" out
-            @? "application body should emit first-pass call shape"
+          T.isInfixOf "lithic_unsupported_fn(0);" out
+            @? "application body should emit compile-safe placeholder call"
 
     , testCase "case bodies emit switch skeleton" $
         let out = cgenProgram [defCaseDecl]

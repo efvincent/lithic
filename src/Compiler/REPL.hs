@@ -64,16 +64,19 @@ replLoop term st = go (MkEnv [])
               go nextEnv
 
     emitCodeGen :: TopLevel -> Eff es ()
-    emitCodeGen topLevel =
-      case elabTopLevel topLevel of
-        Left (MkElabError elabMsg _) ->
-          term.output $ "[CGen Error] " <> elabMsg
-        Right coreTop ->
-          case coreTop of
-            CTDecl coreDecl ->
-              term.output $ "[C]\n" <> cgenProgram [coreDecl]
-            CTExpr _ ->
-              term.output "[C] (expression codegen not yet supported in REPL; declaration-only for now)"
+    emitCodeGen = \case
+      TExpr _ ->
+        term.output "[C] (expression codegen not yet supported in REPL; declaration-only for now)"
+      tDecl@(TDecl _) ->
+        case elabTopLevel tDecl of
+          Left (MkElabError elabMsg _) ->
+            term.output $ "[CGen Error] " <> elabMsg
+          Right coreTop ->
+            case coreTop of
+              CTDecl coreDecl ->
+                term.output $ "[C]\n" <> cgenProgram [coreDecl]
+              CTExpr _ ->
+                term.output "[C] (expression codegen not yet supported in REPL; declaration-only for now)"
 
     -- Keep expression and declaration handling isolated so declaration
     -- persistence does not leak into parse/lex error paths.

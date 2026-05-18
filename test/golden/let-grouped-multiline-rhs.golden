@@ -1,4 +1,1 @@
-[AST] Let [4,1]..[9,4] (PVar [4,5]..[4,5] "x") (Case [5,7]..[7,18] (Lit [5,12]..[5,15] (LBool True)) [(PLit [6,9]..[6,12] (LBool True),Lit [6,17]..[6,17] (LInt 1)),(PLit [7,9]..[7,13] (LBool False),Lit [7,18]..[7,18] (LInt 0))]) (Let [8,5]..[9,4] (PVar [8,5]..[8,5] "y") (Lit [8,9]..[8,9] (LInt 2)) (Var [9,4]..[9,4] "y"))
-[Type] TInt [8,9]..[8,9]
-[Core] CLet [4,1]..[9,4] (CPVar [4,5]..[4,5] "x") (CCase [5,7]..[7,18] (CLit [5,12]..[5,15] (LBool True)) [(CPLit [6,9]..[6,12] (LBool True),CLit [6,17]..[6,17] (LInt 1)),(CPLit [7,9]..[7,13] (LBool False),CLit [7,18]..[7,18] (LInt 0))]) (CLet [8,5]..[9,4] (CPVar [8,5]..[8,5] "y") (CLit [8,9]..[8,9] (LInt 2)) (CVar [9,4]..[9,4] "y"))
-[Val] VLit (LInt 2)
+Type Error: Unreachable pattern branch at [7,9]..[7,13]

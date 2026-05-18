@@ -37,9 +37,11 @@ cPreludeText =
   \#include <stdbool.h>\n\
   \#include <stdlib.h>\n\
   \#include <stdio.h>\n\
-  \\n\
-  \/* Lithic Phase 10 C backend scaffold */\n\
-  \\n"
+  \/* Lithic Phase 10 C backend scaffold */\n\n\
+  \static inline void lithic_variant_make(intptr_t _tag, intptr_t _payload) { (void)_tag; (void)_payload; }\n\
+  \static inline void lithic_record_make(intptr_t _field_count) { (void)_field_count; }\n\
+  \static inline void lithic_record_select(intptr_t _record, intptr_t _field) { (void)_record; (void)_field; }\n\
+  \static inline void lithic_unsupported_fn(intptr_t _arg) { (void)_arg; }\n\n"
 
 -- | Emit a declaration-count comment
 cDeclCountComment :: [CoreDecl] -> TB.Builder
@@ -125,7 +127,8 @@ cgenFunctionBody = \case
   CApp _ fn arg ->
     "  /* app fn: " <> cgenExprTag fn <> " */\n"
     <> "  /* app arg: " <> cgenExprTag arg <> " */\n"
-    <> "  " <> cgenCallTarget fn <> "(" <> cgenCallArg arg <>");\n"
+    <> "  /* TODO(phase10-c2): lower application call */\n"
+    <> "  lithic_unsupported_fn(0);\n"
     <> "  return;\n"
   CCase _ scrut branches ->
     "  /* case scrut: " <> cgenExprTag scrut <> " */\n"
@@ -170,18 +173,11 @@ cgenLiteralTag = \case
   LString{} -> "String"
   LBool{}   -> "Bool"
 
--- | Emit a first-pass call target for CApp lowering.
--- Variable function heads become C symbols; other heads stay explicit placeholders.
-cgenCallTarget :: CoreExpr -> Text
-cgenCallTarget = \case
-  CVar _ fnName -> cFunctionName fnName
-  other -> "/* unsupported-call-target:" <> cgenExprTag other <> " */ lithic_unsupported_fn"
-
 -- | Emit a first-pass call argument placeholder.
 -- Variable and literal args get simple emitted forms; all others stay explicit placeholders.
 cgenCallArg :: CoreExpr -> Text
 cgenCallArg = \case
-  CVar _ argName -> argName
+  CVar _ argName -> "/* var:" <> argName <> " */ 0"
   CLit _ lit -> "/* lit:" <> cgenLiteralTag lit <> " */ 0"
   other -> "/* unsupported-call-arg:" <> cgenExprTag other <> " */ 0"
 

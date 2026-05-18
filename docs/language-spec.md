@@ -1,8 +1,8 @@
 # Lithic Language Specification (Living Core Spec)
 
 Status: Active living spec for implemented behavior.
-Version: 0.6 (2026-05-17)
-Scope baseline: Parser + bidirectional checker through Phase 9H (persistent REPL declaration environment).
+Version: 0.7 (2026-05-18)
+Scope baseline: Parser + bidirectional checker through Phase 10 C backend scaffold (literal-scrutinee coverage fix, REPL `[C]` output).
 
 This document is the normative source for the currently implemented Lithic surface language and static semantics. Where implementation and docs disagree, this spec is the authority to reconcile against.
 
@@ -378,7 +378,9 @@ Current deferred scope:
 - Exhaustiveness/redundancy checks for binder patterns in `let` and lambda parameters.
 
 Implementation note:
-- When a `case` scrutinee is a known literal value, the checker narrows coverage against that observed literal head. This means a branch set such as `case True of True => 1` is accepted without requiring an explicit `False` branch, while `case True of False => 1` still reports non-exhaustiveness.
+- When a `case` scrutinee is a known literal value, the checker narrows coverage against that observed literal head.
+- `case True of True => 1` is accepted without requiring an explicit `False` branch.
+- Non-matching literal-only branches are treated as unreachable (for example `case True of False => 1` reports an unreachable branch diagnostic).
 
 ### 5.7 Numeric Operators (Stable current policy, Provisional long-term model)
 
@@ -396,8 +398,8 @@ Current REPL-visible categories:
 - Lex error: `Lex Error: <msg>`
 - Parse error: `Parse Error: <msg>`
 - Type error: `Type Error: <msg> at <span>`
-- Successful expression submission: `[AST] <show ast>` then `[Type] <show type>`
-- Successful persisted definition submission: `[Decl] <name>` then `[Type] <show type>`
+- Successful expression submission: `[AST] <show ast>` then `[Type] <show type>` then `[C] (expression codegen not yet supported in REPL; declaration-only for now)`
+- Successful persisted definition submission: `[Decl] <name>` then `[Type] <show type>` then `[C] <generated scaffold>`
 - Successful signature-only declaration submission: `[Decl] <name> (signature accepted; persistence deferred in this slice)`
 
 Contract requirements:
