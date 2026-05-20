@@ -62,7 +62,7 @@ cgenUnitTests =
          in do
           T.isInfixOf "int64_t lithic_constFortyTwo(int64_t x) {" out
             @? "Int->Int type should yield int64_t signature"
-          T.isInfixOf "return (int64_t)42;" out
+          T.isInfixOf "return (int64_t)(int64_t)42;" out
             @? "Int literal body should emit typed return"
 
     , testCase "case bodies emit switch skeleton" $
@@ -100,7 +100,7 @@ cgenUnitTests =
           T.isInfixOf "/* definition: b */" out @? "definition b missing"
           (posA >= 0 && posB >= 0 && posA < posB) @? "definitions should preserve input order"
 
-    , testCase "adjacent declarations have a single blank-line separator" $
+    , testCase "adjacent declarations have at least one newline boundary" $
         let out = cgenProgram [(sigDecl, Nothing), (defDecl, Nothing)]
             sigNeedle = "/* signature (not yet emitted): id */"
             defNeedle = "/* definition: id */"
@@ -116,18 +116,18 @@ cgenUnitTests =
 
     , testCase "Int literal body emits typed return statement" $
         let out = cgenProgram [(defLitBodyDecl, Nothing)]
-         in T.isInfixOf "return (int64_t)42;" out
-              @? "Int literal body should emit return (int64_t)42;"
+          in T.isInfixOf "return (intptr_t)(int64_t)42;" out
+            @? "Int literal body should emit return with intptr_t fallback coercion"
 
     , testCase "Bool True literal emits return 1" $
         let out = cgenProgram [(defTrueDecl, Nothing)]
-         in T.isInfixOf "return 1;" out
-              @? "True literal should emit return 1;"
+          in T.isInfixOf "return (intptr_t)1;" out
+            @? "True literal should emit return with intptr_t fallback coercion"
 
     , testCase "Bool False literal emits return 0" $
         let out = cgenProgram [(defFalseDecl, Nothing)]
-         in T.isInfixOf "return 0;" out
-              @? "False literal should emit return 0;"
+          in T.isInfixOf "return (intptr_t)0;" out
+            @? "False literal should emit return with intptr_t fallback coercion"
 
     , testCase "variable terminal emits return varname" $
         let out = cgenProgram [(defIdDecl, Nothing)]
@@ -137,8 +137,8 @@ cgenUnitTests =
     , testCase "let CPVar binding emits stack local and recurses to body" $
         let out = cgenProgram [(defLetDecl, Nothing)]
          in do
-          T.isInfixOf "intptr_t y = (int64_t)1;" out
-            @? "let CPVar binding should emit intptr_t local initialised from literal"
+          T.isInfixOf "intptr_t y = (intptr_t)(int64_t)1;" out
+            @? "let CPVar binding should emit intptr_t local with explicit coercion"
           T.isInfixOf "return y;" out
             @? "let body (variable terminal) should be emitted after local"
 
@@ -156,13 +156,13 @@ cgenUnitTests =
 
     , testCase "Float literal body emits double return" $
         let out = cgenProgram [(defFloatDecl, Nothing)]
-         in T.isInfixOf "return (double)" out
-              @? "Float literal body should emit return (double)..."
+          in T.isInfixOf "return (intptr_t)(double)" out
+            @? "Float literal body should emit return with intptr_t fallback coercion"
 
     , testCase "String literal body emits quoted string return" $
         let out = cgenProgram [(defStringDecl, Nothing)]
-         in T.isInfixOf "return \"hello\";" out
-              @? "String literal body should emit return \"hello\";"
+          in T.isInfixOf "return (intptr_t)\"hello\";" out
+            @? "String literal body should emit return with intptr_t fallback coercion"
     ]
   where
     -- ── Shared synthetic declarations ──────────────────────────────────────

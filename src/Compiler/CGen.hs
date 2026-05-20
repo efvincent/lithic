@@ -26,8 +26,10 @@ type Decl = (CoreDecl, Maybe Type)
 type Decls = [Decl]
 
 -- | Emit a C translation unit for a list of (declaration, zonked-type) pairs.
--- Pass @Just ty@ for declarations whose type is known from the typechecker;
--- @Nothing@ falls back to @intptr_t@ for all paramaters and return types.
+-- Pass @Just ty@ when a declaration's zonked type is known.
+-- @Nothing@ falls back to @intptr_t@ for all parameters and return types.
+-- This fallback path must still emit compilable C, so literal/inline expressions
+-- are explicitly coerced to the target emitted C type at use sites.
 cgenProgram :: Decls -> Text
 cgenProgram pairs = 
   TL.toStrict $
@@ -116,7 +118,7 @@ cgenDecl (decl, mTy) = case decl of
           DeclConstant body ->
             let valTy = maybe "intptr_t" cgenCType mTy
                 fName = cFunctionName name
-                fBody = cgenExprValue body
+                fBody = cgenExprValueAs valTy body
              in TB.fromText $ blks [c|
              /* definition: $name */
              $valTy $fName = $fBody; |]
@@ -176,7 +178,7 @@ cgenFunctionBody retTy = \case
   -- Targets 2 & 3: actual interal and vairable emission.
   CLit _ lit ->
     let r = cgenLiteralValue lit 
-    in blk [c| return $r; |]
+    in blk [c| return ($retTy)$r; |]
   CVar _ varName ->
     blk [c| return $varName; |]
 
@@ -184,7 +186,7 @@ cgenFunctionBody retTy = \case
   -- Only CPVar patterns are precisely lowered; other patterns fall through
   -- to a scaffold comment and continue with thge body.
   CLet _ (CPVar _ varName) rhs body ->
-    let expr = cgenExprValue rhs
+    let expr = cgenExprValueAs "intptr_t" rhs
         fBody = cgenFunctionBody retTy body
     in blk [c|
       intptr_t $varName = $expr;
@@ -266,6 +268,14 @@ cgenExprValue = \case
   CLit _ lit     -> cgenLiteralValue lit
   CVar _ varName -> varName
   other          -> "/* unsupported-rhs:" <> cgenExprTag other <> " */ (intptr_t)0"
+
+-- | Emit a C expression coerced to a target C type.
+-- This is used where fallback typing can otherwise produce invalid C
+-- (for example string literals flowing into intptr_t).
+cgenExprValueAs :: Text -> CoreExpr -> Text
+cgenExprValueAs targetTy expr =
+  let raw = cgenExprValue expr
+  in [c|($targetTy)$raw|]
 
 -- | Emit a C literal expression for a Lithic literal value.
 cgenLiteralValue :: Literal -> Text
