@@ -210,6 +210,57 @@ Near-term follow-up (post-normalization):
 2. Introduce concrete value temporaries/ABI for call and record helper stubs.
 3. Wire runtime helper declarations (`lithic_variant_make`, `lithic_record_make`, `lithic_record_select`) into generated prelude or support runtime.
 
+## Immediate Next Slice (C2.2) — Call/Case/Variant Lowering Pass
+
+Branch: `feat/phase10-c2-2-callcase-lowering`
+
+Goal: move from typed scalar/literal lowering to first-pass executable control/data lowering while preserving compile-safe output.
+
+### C2.2 Scope
+
+1. Replace `CApp` placeholder return path with first-pass callable emission shape.
+2. Replace `CCase` `switch (0)` skeleton with scrutinee-driven control flow for literal/int heads.
+3. Tighten `CVariant` and `CSelect` placeholders to use explicit intermediate temporaries and typed coercion boundaries.
+4. Keep unsupported forms explicit and compilable with deterministic markers.
+
+### C2.2 Implementation Checklist
+
+1. `CApp`:
+  - introduce a minimal call-target/value convention,
+  - emit call statements that compile under current placeholder runtime helpers,
+  - preserve fallback diagnostics for unsupported call-target shapes.
+2. `CCase`:
+  - lower literal scrutinee branches to concrete `if`/`else` or `switch` over emitted scrutinee value,
+  - preserve branch-order semantics,
+  - keep default/unmatched behavior explicit.
+3. `CVariant`/`CSelect`:
+  - materialize intermediate temporaries to avoid repeated expression emission,
+  - keep helper API placeholders stable until C3 runtime layout is finalized.
+4. Newline/template policy:
+  - continue using `Compiler.QQ` `c`/`blk`/`blks`,
+  - preserve separator boundaries required by `Test.CGen`.
+
+### C2.2 Test Additions
+
+Add focused tests in `test/Test/CGen.hs` for:
+
+1. concrete app-lowering shape (no bare `lithic_unsupported_fn(0)` for supported call forms),
+2. case lowering over literal scrutinees with predictable branch ordering markers,
+3. variant/select emission with intermediate temporary names,
+4. fallback diagnostics for unsupported call/case forms.
+
+Validation command:
+
+```sh
+cabal test lithic-test --test-options='--pattern "CGen Unit Tests"'
+```
+
+Exit criteria for C2.2:
+
+1. Existing CGen unit tests remain green.
+2. New C2.2 tests pass and lock emitted call/case skeleton contracts.
+3. Full suite remains green (`cabal test lithic-test`).
+
 ## Immediate Next Slice (C2.1) — Actual C Emission
 
 Branch: `feat/phase10-c2-emission`

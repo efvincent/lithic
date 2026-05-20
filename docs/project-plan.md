@@ -270,7 +270,7 @@ Status: Completed in 0.9.3.0 documentation milestone.
 ### 📅 Phase 10: C Code Generation — First Pass
 * **Objective:** Produce a working end-to-end C backend for the monomorphic subset of Lithic programs. This is an intentionally scoped first pass: prove the zero-runtime concept, establish the code generation pipeline, and emit correct C for the programs that can already be expressed and type-checked. Surface-syntax completeness is explicitly deferred; adding new syntax in Phase 11 will not require touching the backend.
 * **Prerequisites:** Phase 9 top-level Core/Elaborator plumbing (named top-level functions in Core; REPL persistent environment). No other Phase 9 deferred items are required.
-* **Status (May 2026):** Phase 10 C2 scaffold is merged (`feat/phase10-c-codegen`, v0.9.10.0). C2.1 (`feat/phase10-c2-emission`) has landed typed signatures, literal/variable return emission, `let`-to-local lowering for `CPVar`, and monomorphism guard diagnostics in CGen output. Remaining C2.1 work is closure/data lowering and CLI file-emission wiring.
+* **Status (May 2026):** Phase 10 C2 scaffold is merged (`feat/phase10-c-codegen`, v0.9.10.0). C2.1 (`feat/phase10-c2-emission`) landed typed signatures, literal/variable return emission, `let`-to-local lowering for `CPVar`, monomorphism guard diagnostics, and QQ-based interpolation helpers. Active next slice is C2.2 (`feat/phase10-c2-2-callcase-lowering`) focused on call/case/variant lowering contracts.
 * **Scope (in):**
   * Monomorphic programs only — any `TForall` / `TMeta` surviving zonk is a hard codegen error: "program is not fully monomorphic; instantiate before code generation".
   * Primitive types: `Int` → `int64_t`, `Float` → `double`, `String` → `const char*` (null-terminated, immutable), `Bool` → `int` (`0`/`1`).
@@ -295,7 +295,7 @@ Status: Completed in 0.9.3.0 documentation milestone.
   * [ ] Implement structural record codegen: heap-allocated field array with string-keyed lookup helper.
   * [ ] Implement variant codegen: discriminant integer + payload union.
   * [x] Implement top-level function emission as C named functions with typed signatures (where zonked types are available).
-  * [ ] Implement `let` → stack local, `case` → `switch`/`if-else` chain.
+  * [ ] Implement `let` → stack local, `case` → `switch`/`if-else` chain. (`let` CPVar path landed; case lowering remains placeholder)
   * [x] Implement monomorphism guard: reject any zonked type containing `TForall` or unresolved `TMeta` with a codegen-phase diagnostic.
   * [x] Add interpolation helper module (`Compiler.QQ`) for stable C text templates with explicit newline policies (`c`, `blk`, `blks`).
   * [ ] Add a `--emit-c` flag to the CLI that runs the full pipeline through `cgenProgram` and writes `.c` output.
