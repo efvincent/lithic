@@ -177,7 +177,7 @@ phase9HScaffoldUnitTests =
                 ]
                 outputs
               expectOutputContains "[C]" outputs
-              expectOutputContains "codegen error: program is not full monomorphic" outputs
+              expectOutputContains "codegen error: program is not fully monomorphic" outputs
         ]
     ]
 

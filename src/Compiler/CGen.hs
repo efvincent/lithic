@@ -88,7 +88,7 @@ declShape expr = case go [] expr of
 -- Applies the monomorphism guard before lowering function bodies.
 cgenDecl :: Decl -> TB.Builder
 cgenDecl (decl, mTy) = case decl of 
-  CDeclSig _ name _ -> TB.fromText $ blks [c|/* signature (not yet emitted): $name */" |]
+  CDeclSig _ name _ -> TB.fromText $ blks [c|/* signature (not yet emitted): $name */ |]
   CDeclDef _ name rhs ->
     -- Monomorphism guard: reject surviving TForall, TMeta, TVar or TSkolem
     case mTy of
@@ -96,7 +96,7 @@ cgenDecl (decl, mTy) = case decl of
         TB.fromText $
         blks [c|
         /* definition: $name */
-        /* codegen error: program is not full monomorphic; instantiate before code generation */ |]
+        /* codegen error: program is not fully monomorphic; instantiate before code generation */ |]
       _ ->
         case declShape rhs of
           DeclFunction params body ->

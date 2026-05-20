@@ -145,13 +145,13 @@ cgenUnitTests =
     , testCase "polymorphic type triggers monomorphism guard" $
         let polyTy = TForall sp0 ["a"] (TArrow sp0 (TVar sp0 "a") (TVar sp0 "a"))
             out    = cgenProgram [(defIdDecl, Just polyTy)]
-       in T.isInfixOf "codegen error: program is not full monomorphic" out
+       in T.isInfixOf "codegen error: program is not fully monomorphic" out
               @? "TForall type should trigger the monomorphism guard"
 
     , testCase "unresolved meta type triggers monomorphism guard" $
         let metaTy = TArrow sp0 (TMeta sp0 0) (TMeta sp0 0)
             out    = cgenProgram [(defIdDecl, Just metaTy)]
-       in T.isInfixOf "codegen error: program is not full monomorphic" out
+       in T.isInfixOf "codegen error: program is not fully monomorphic" out
               @? "TMeta type should trigger the monomorphism guard"
 
     , testCase "Float literal body emits double return" $

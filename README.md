@@ -53,7 +53,7 @@ In the REPL:
 - Phase-7 behavior: case exhaustiveness and unreachable-branch checks are enforced for both finite constructor universes and the current open-universe cases supported by the pattern analysis.
 - Successful expression input is rendered as `[AST] <show ast>`, then `[Type] <show type>`, then an explicit codegen status line (`[C] (expression codegen not yet supported in REPL; declaration-only for now)`).
 - Successful declaration input is rendered as `[Decl] <name>` and then `[Type] <show type>` for persisted definitions, or `[Decl] <name> (signature accepted; persistence deferred in this slice)` for signature-only declarations. Declaration submissions also emit a `[C]` block with the current generated C scaffold.
-- For polymorphic declarations in the REPL (for example `id x = x`), C emission now reports an explicit monomorphism guard diagnostic inside the `[C]` block (`codegen error: program is not full monomorphic; instantiate before code generation`).
+- For polymorphic declarations in the REPL (for example `id x = x`), C emission now reports an explicit monomorphism guard diagnostic inside the `[C]` block (`codegen error: program is not fully monomorphic; instantiate before code generation`).
 - Lexing, parsing, and type errors are shown inline in the same pane.
 - Press Enter to submit the current editor contents.
 - Enter `:quit` or press Ctrl-C to exit the session.

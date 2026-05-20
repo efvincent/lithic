@@ -405,7 +405,7 @@ Current REPL-visible categories:
 Current C2.1 codegen diagnostic note:
 1. Declaration codegen still requires monomorphic declaration types.
 2. When a declaration type includes unresolved polymorphism at the CGen boundary, the emitted `[C]` block includes:
-       `codegen error: program is not full monomorphic; instantiate before code generation`.
+       `codegen error: program is not fully monomorphic; instantiate before code generation`.
 
 Contract requirements:
 1. Diagnostics carry precise `Span` whenever an originating token/node exists.

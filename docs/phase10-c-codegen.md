@@ -189,7 +189,7 @@ Current `Compiler.CGen` emission coverage:
   - `CSelect` emits `lithic_record_select(...)`
 5. Non-lambda top-level declarations emit a typed/global constant shape.
 6. Monomorphism guard rejects unresolved declaration types and emits:
-  - `codegen error: program is not full monomorphic; instantiate before code generation`
+  - `codegen error: program is not fully monomorphic; instantiate before code generation`
 
 Interpolation policy now used in this slice:
 
