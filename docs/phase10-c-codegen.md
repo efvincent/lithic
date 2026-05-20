@@ -1,7 +1,7 @@
 # Phase 10 Scaffold: C Code Generation First Pass
 
-Status: C2 scaffold complete (2026-05-18) — all Core forms emit compilable placeholder C
-Branch: feat/phase10-c-codegen
+Status: C2.1 in progress (2026-05-20) — typed signatures + literal/var/let emission landed
+Branch: feat/phase10-c2-emission
 
 ## Scope
 
@@ -172,25 +172,31 @@ Definition of done for C2.0 prep handoff:
 1. All CGen scaffold unit tests pass.
 2. C2 implementation can add focused tests for function skeleton emission without rewriting existing scaffold tests.
 
-## C2 Scaffold Status (Current)
+## C2.1 Status (Current)
 
-Current `Compiler.CGen` body-level emission coverage (first-pass placeholders):
+Current `Compiler.CGen` emission coverage:
 
-1. Top-level lambda definitions emit named C function skeletons (`static void lithic_<name>(void)`).
-2. Terminal forms emit explicit return-path placeholders:
-	- `CLit` emits literal-kind comment + `return;`
-	- `CVar` emits variable comment + `return;`
-3. Compound forms now emit call/control placeholders instead of generic TODO-only comments:
-	- `CApp` currently emits a compile-safe placeholder call (`lithic_unsupported_fn(0)`) plus TODO marker
-	- `CCase` emits `switch (0)` skeleton with numbered branch stubs
-	- `CVariant` emits `lithic_variant_make(...)`
-	- `CRecord` emits `lithic_record_make(...)`
-	- `CSelect` emits `lithic_record_select(...)`
+1. Top-level lambda definitions emit typed C function signatures derived from zonked types when available.
+2. Terminal forms now emit actual C returns:
+  - `CLit` emits scalar literals (`int64_t`, `double`, string, `0/1` bool)
+  - `CVar` emits `return <varName>;`
+3. `CLet` with `CPVar` emits a stack local (`intptr_t <name> = <rhs>;`) and continues with lowered body.
+4. Compound forms currently remain explicit placeholders:
+  - `CApp` emits `lithic_unsupported_fn(0)` plus placeholder return
+  - `CCase` emits `switch (0)` skeleton with branch stubs
+  - `CVariant` emits `lithic_variant_make(...)`
+  - `CRecord` emits `lithic_record_make(...)`
+  - `CSelect` emits `lithic_record_select(...)`
+5. Non-lambda top-level declarations emit a typed/global constant shape.
+6. Monomorphism guard rejects unresolved declaration types and emits:
+  - `codegen error: program is not full monomorphic; instantiate before code generation`
 
-Normalization policy now used in this slice:
+Interpolation policy now used in this slice:
 
-1. Unsupported body forms route through a single marker: `unsupported(phase10-c2)`.
-2. Constructor-specific helper comments remain explicit (`unsupported-call-target`, `unsupported-call-arg`).
+1. `Compiler.QQ` provides `c`, `blk`, and `blks` for C text template assembly.
+2. `[c| ... |]` preserves embedded trailing newlines in the quoted block.
+3. `blk` appends one trailing newline; `blks` appends two.
+4. CGen output tests treat separator boundaries as newline-shape tolerant to avoid brittle assumptions around interpolation formatting.
 
 Near-term follow-up (post-normalization):
 

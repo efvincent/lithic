@@ -16,7 +16,7 @@ import Bluefin.Reader (runReader)
 import Bluefin.IO (IOE, effIO)
 
 import Compiler.AST.Core (CoreTopLevel(..))
-import Compiler.AST (Decl(..), Pattern(..), TopLevel(..))
+import Compiler.AST (Decl(..), Pattern(..), TopLevel(..), Type)
 import Compiler.TUI (TUIEvent(..))
 import Compiler.Lexer (runLexer, LexError(..))
 import Compiler.Parser (ParseError(..), parseTopLevel)
@@ -63,8 +63,11 @@ replLoop term st = go (MkEnv [])
 
               go nextEnv
 
-    emitCodeGen :: TopLevel -> Eff es ()
-    emitCodeGen = \case
+    -- | Emit C codegen output for a top-level submission.
+    -- @mTy@ carries the zonked type for declaration submissions where the
+    -- typechecker result is available; @Nothing@ falls back to uniform intptr_t.
+    emitCodeGen :: TopLevel -> Maybe Type -> Eff es ()
+    emitCodeGen topLevel mTy = case topLevel of
       TExpr _ ->
         term.output "[C] (expression codegen not yet supported in REPL; declaration-only for now)"
       tDecl@(TDecl _) ->
@@ -74,7 +77,7 @@ replLoop term st = go (MkEnv [])
           Right coreTop ->
             case coreTop of
               CTDecl coreDecl ->
-                term.output $ "[C]\n" <> cgenProgram [coreDecl]
+                term.output $ "[C]\n" <> cgenProgram [(coreDecl, mTy)]
               CTExpr _ ->
                 term.output "[C] (expression codegen not yet supported in REPL; declaration-only for now)"
 
@@ -95,7 +98,7 @@ replLoop term st = go (MkEnv [])
             pure env
           Right ty -> do
             term.output $ "[Type] " <> T.pack (show ty)
-            emitCodeGen (TExpr ast)
+            emitCodeGen (TExpr ast) Nothing
             pure env
 
       TDecl decl ->
@@ -110,7 +113,7 @@ replLoop term st = go (MkEnv [])
         DeclSig _ name _ -> do
           term.output $
             "[Decl] " <> name <> " (signature accepted; persistence deferred in this slice)"
-          emitCodeGen (TDecl decl)
+          emitCodeGen (TDecl decl) Nothing
           pure env
 
         DeclDef _ pat rhs ->
@@ -130,7 +133,7 @@ replLoop term st = go (MkEnv [])
                   let updatedEnv = MkEnv ((name, polyTy) : env.bindings)
                   term.output $ "[Decl] " <> name
                   term.output $ "[Type] " <> T.pack (show polyTy)
-                  emitCodeGen (TDecl decl)
+                  emitCodeGen (TDecl decl) (Just polyTy)
                   pure updatedEnv
 
             _ -> do

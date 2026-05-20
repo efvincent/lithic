@@ -177,7 +177,7 @@ phase9HScaffoldUnitTests =
                 ]
                 outputs
               expectOutputContains "[C]" outputs
-              expectOutputContains "static void lithic_id(void)" outputs
+              expectOutputContains "codegen error: program is not full monomorphic" outputs
         ]
     ]
 

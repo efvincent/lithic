@@ -1,7 +1,11 @@
--- | Phase 10 C backend scaffold.
--- Provides a minimal declaration-level entry point for C code emission
+{-# LANGUAGE QuasiQuotes #-}
+-- | Phase 10 C backend - C2.1 emission.
+-- Emits typed C function signatures and actual C expressions for the monomorphic
+-- first-pass subset: primitive literals, variables, and let-bindings.
+-- Compound forms (application, case, variants, records) still emit compilable
+-- placeholder stubs pending C3 data-representation work
 module Compiler.CGen
-  ( cgenProgram
+  ( cgenProgram 
   ) where
 
 import Data.Text (Text)
@@ -10,92 +14,280 @@ import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Builder as TB
 import Data.Char (isAlphaNum)
 
-import Compiler.AST (Literal(..))
+import Compiler.QQ (c, blk, blks)
+import Compiler.AST (Literal(..), Type(..))
 import Compiler.AST.Core (CoreDecl(..), CoreExpr(..), CorePattern(..))
 
--- | Emit a C translation-unit scaffold for a list of core declarations.
---
--- This uses a "best-balance" structure:
--- 1. one static prelude block as a chunk
--- 2. dynamic declaration fragments appended via Builder
-cgenProgram :: [CoreDecl] -> Text
-cgenProgram decls =
+-- -- Alias the quasiquoter at the top level to get syntax highlighting of the C blocks
+-- c :: QuasiQuoter
+-- c = text
+
+type Decl = (CoreDecl, Maybe Type)
+type Decls = [Decl]
+
+-- | Emit a C translation unit for a list of (declaration, zonked-type) pairs.
+-- Pass @Just ty@ for declarations whose type is known from the typechecker;
+-- @Nothing@ falls back to @intptr_t@ for all paramaters and return types.
+cgenProgram :: Decls -> Text
+cgenProgram pairs = 
   TL.toStrict $
   TB.toLazyText $
   cPreludeChunk
-    <> cDeclCountComment decls
-    <> cDeclarationSection decls
+    <> cDeclCountComment pairs
+    <> cDeclarationSection pairs
 
--- | Static C prelude kept as one chunk for readability.
+-- | Static C prelude
 cPreludeChunk :: TB.Builder
 cPreludeChunk = TB.fromText cPreludeText
 
--- | Raw prelude text for generated C output.
+-- | Raw prelude text for generated C output
 cPreludeText :: Text
-cPreludeText =
-  "#include <stdint.h>\n\
-  \#include <stdbool.h>\n\
-  \#include <stdlib.h>\n\
-  \#include <stdio.h>\n\
-  \/* Lithic Phase 10 C backend scaffold */\n\n\
-  \static inline void lithic_variant_make(intptr_t _tag, intptr_t _payload) { (void)_tag; (void)_payload; }\n\
-  \static inline void lithic_record_make(intptr_t _field_count) { (void)_field_count; }\n\
-  \static inline void lithic_record_select(intptr_t _record, intptr_t _field) { (void)_record; (void)_field; }\n\
-  \static inline void lithic_unsupported_fn(intptr_t _arg) { (void)_arg; }\n\n"
+cPreludeText = blks [c|
+    #include <stdint.h>
+    #include <stdbool.h>
+    #include <stdlib.h>
+    #include <stdio.h>
+    /* Lithic Phase 10 C backend */
+    static inline void lithic_variant_make(intptr_t _tag, intptr_t _payload) { (void)_tag; (void)_payload; }
+    static inline void lithic_record_make(intptr_t _field_count) { (void)_field_count; }
+    static inline void lithic_record_select(intptr_t _record, intptr_t _field) { (void)_record; (void)_field; }
+    static inline void lithic_unsupported_fn(intptr_t _arg) { (void)_arg; } |]
 
 -- | Emit a declaration-count comment
-cDeclCountComment :: [CoreDecl] -> TB.Builder
-cDeclCountComment decls =
-  TB.fromText $
-  "/* declarations: " <> T.pack (show (length decls)) <> " */\n\n"
+cDeclCountComment :: Decls -> TB.Builder
+cDeclCountComment pairs =
+  let decls = T.pack (show (length pairs)) 
+  in TB.fromText $ blks [c| /* declarations: $decls */ |]
 
--- | Emit all declaration fragments separated by one blank line.
-cDeclarationSection :: [CoreDecl] -> TB.Builder
-cDeclarationSection decls =
-  intercalateBuilders (TB.fromText "\n") (map cgenDecl decls)
+-- | Emit all declaration fragments separated by one blank line
+cDeclarationSection :: Decls -> TB.Builder
+cDeclarationSection pairs =
+  intercalateBuilders (TB.fromText "\n") (map cgenDecl pairs)
 
--- | Emit a placeholder C fragment for one top-level core declaration
-cgenDecl :: CoreDecl -> TB.Builder
-cgenDecl = \case
-  CDeclSig _ name _ ->
-    TB.fromText $
-    "/* signature (not yet emitted): " <> name <> " */\n"
+-- ─── Declaration emission ────────────────────────────────────────────────────
+
+-- | Shape of a top-level Core RHS after peeling off the lambda spine.
+data DeclShape
+  = DeclFunction [Text] CoreExpr
+  -- ^ Parameter names (from @CPVar@; other patterns contribute @"_"@) and terminal body.
+  | DeclConstant CoreExpr
+  -- ^ Non-lambda RHS treated as a global constant initializer
+
+-- | Classify a top-level RHS by its outer lambda spine.
+declShape :: CoreExpr -> DeclShape
+declShape expr = case go [] expr of
+  ([], body) -> DeclConstant body
+  (ps, body) -> DeclFunction ps body
+  where 
+    go params (CLam _ pat body) = go (params ++ [patName pat]) body
+    go params body              = (params, body)
+    patName (CPVar _ n)         = n
+    patName _                   = "_"
+
+-- | Emit a C fragment for one top-level core declaration.
+-- Applies the monomorphism guard before lowering function bodies.
+cgenDecl :: Decl -> TB.Builder
+cgenDecl (decl, mTy) = case decl of 
+  CDeclSig _ name _ -> TB.fromText $ blks [c|/* signature (not yet emitted): $name */" |]
   CDeclDef _ name rhs ->
-    case collectLamArity rhs of
-      Just (arity, body) ->
+    -- Monomorphism guard: reject surviving TForall, TMeta, TVar or TSkolem
+    case mTy of
+      Just ty | not (isMonomorphic ty) ->
         TB.fromText $
-        "/* definition: " <> name <> " */\n"
-        <> "/* rhs: CLam */\n"
-        <> "static void " <> cFunctionName name <> "(void) {\n"
-        <> "  /* arity: " <> tshow arity <> " */\n"
-        <> cgenFunctionBody body
-        <> "}\n"
-      Nothing ->
-        TB.fromText $
-        "/* definition: " <> name <> " */\n"
-        <> "/* rhs: " <> cgenExprTag rhs <> " */\n"
-        <> "/* unsupported(phase10-c2): expected top-level lambda */\n"
+        blks [c|
+        /* definition: $name */
+        /* codegen error: program is not full monomorphic; instantiate before code generation */ |]
+      _ ->
+        case declShape rhs of
+          DeclFunction params body ->
+            let retTy = cgenReturnType mTy
+                pTysFull = take (length params) (cgenParamTypes mTy ++ repeat "intptr_t")
+                paramList
+                  | null params = "void"
+                  | otherwise = T.intercalate ", " (zipWith (\t n -> t <> " " <> n) pTysFull params)
+            in TB.fromText $
+              let fName = cFunctionName name
+                  fBody = cgenFunctionBody retTy body
+              in blks [c|
+              /* definition: $name */
+              $retTy $fName($paramList) {
+                $fBody
+              } |]
+          DeclConstant body ->
+            let valTy = maybe "intptr_t" cgenCType mTy
+                fName = cFunctionName name
+                fBody = cgenExprValue body
+             in TB.fromText $ blks [c|
+             /* definition: $name */
+             $valTy $fName = $fBody; |]
 
--- | Collect lambda arity from a top-level declaration RHS.
--- Returns arity and terminal body expression.
-collectLamArity :: CoreExpr -> Maybe (Int, CoreExpr)
-collectLamArity expr = go 0 expr
+-- ─── Type mapping ────────────────────────────────────────────────────────────
+
+-- | Map a monomorphic Lithic type to its C type string.
+-- Compound and unrecognised types fall back to @intptr_t@.
+cgenCType :: Type -> Text
+cgenCType = \case
+  TInt{}    -> "int64_t"
+  TFloat{}  -> "double"
+  TBool{}   -> "int"
+  TString{} -> "const char*"
+  _         -> "intptr_t"
+
+-- | Derive the C return type from the rightmost element of an arrow chain.
+-- @Nothing@ falls back to @intptr_t@.
+cgenReturnType :: Maybe Type -> Text
+cgenReturnType Nothing                 = "intptr_t"
+cgenReturnType (Just (TArrow _ _ ret)) = cgenReturnType (Just ret)
+cgenReturnType (Just t)                = cgenCType t
+
+-- | Extract C parameter types from a left-to-right arrow chain.
+-- @Nothing@ returns the empty list; callers pad to required arity with @intptr_t@.
+cgenParamTypes :: Maybe Type -> [Text]
+cgenParamTypes Nothing                        = []
+cgenParamTypes (Just (TArrow _ param rest))   = cgenCType param : cgenParamTypes (Just rest)
+cgenParamTypes _                              = []
+
+-- | Return @True@ iff a type contains no @TForall@, @TMeta@, @TVar@, or @TSkolem@
+-- nodes — i.e. it is safe to lower to monomorphic C.
+isMonomorphic :: Type -> Bool
+isMonomorphic = \case
+  TForall{}                 -> False
+  TMeta{}                   -> False
+  TVar{}                    -> False
+  TSkolem{}                 -> False
+  TArrow _ a b              -> isMonomorphic a && isMonomorphic b
+  TRecord _ row             -> isMonomorphic row
+  TRowExtend _ _ fldTy rest -> isMonomorphic fldTy && isMonomorphic rest
+  TVariant _ inner          -> isMonomorphic inner
+  TInt{}                    -> True
+  TFloat{}                  -> True
+  TBool{}                   -> True
+  TString{}                 -> True
+  TRowEmpty{}               -> True
+  TNominal{}                -> True
+
+-- ─── Statement-level body emission ───────────────────────────────────────────
+
+-- | Emit a C statement sequence for a function body.
+-- @retTy@ is the declared return type of the enclosing function and is used to
+-- produce valid placeholder @return@ values for forms not yet fully lowered.
+cgenFunctionBody :: Text -> CoreExpr -> Text
+cgenFunctionBody retTy = \case
+  -- Targets 2 & 3: actual interal and vairable emission.
+  CLit _ lit ->
+    let r = cgenLiteralValue lit 
+    in blk [c| return $r; |]
+  CVar _ varName ->
+    blk [c| return $varName; |]
+
+  -- Target 4: let-binding to stack-allocated local.
+  -- Only CPVar patterns are precisely lowered; other patterns fall through
+  -- to a scaffold comment and continue with thge body.
+  CLet _ (CPVar _ varName) rhs body ->
+    let expr = cgenExprValue rhs
+        fBody = cgenFunctionBody retTy body
+    in blk [c|
+      intptr_t $varName = $expr;
+      $fBody |]
+  CLet _ pat rhs body ->
+    let pTag = cgenPatternTag pat 
+        expr = cgenExprTag rhs
+        fBody = cgenFunctionBody retTy body
+    in blk [c|
+      /* let binding: $pTag */
+      /* let rhs: $expr */
+      $fBody |]
+  
+  -- Remaining forms: compilable stubs with typoed placeholder returns.
+  CApp _ fn arg ->
+    let cFn = cgenExprTag fn
+        cArg = cgenExprTag arg
+    in blk [c|
+      /* app fn : $cFn */
+      /* app arg: $cArg */
+      /* TODO(phase10-c2): lower application call */
+      lithic_unsupported_fn(0);
+      return ($retTy)0;  /* placeholder */ |]
+  
+  CCase _ scrut branches ->
+    let cScrut = cgenExprTag scrut
+        lBranches = tshow $ length branches
+        cBranches = cgenCaseBranchStubs branches
+    in blk [c|
+      /* case scrut: $cScrut */
+      /* case branches: $lBranches */
+      switch (0) {
+        $cBranches
+        default:
+          break;
+      }
+      return ($retTy)0; /* placeholder */ |]
+  
+  CVariant _ ctor payload ->
+    let cPayload = cgenExprTag payload
+        cVariant = cgenVariantTag ctor
+        cCallArg = cgenCallArg payload
+    in blk [c|
+      /* variant ctor: $ctor */
+      /* variant payload: $cPayload */
+      lithic_variant_make($cVariant, $cCallArg);
+      return ($retTy)0; /* placeholder */ |]
+  
+  CRecord _ fields ->
+    let lFields = tshow . length $ fields
+    in blk [c|
+      /* record field count: $lFields */
+      lithic_record_make($lFields);
+      return ($retTy)0; /* placeholder */ |]
+  
+  CSelect _ recordExpr fieldName ->
+    let cRec = cgenExprTag recordExpr
+        cField = cgenFieldTag fieldName
+    in blk [c|
+      /* select record: $cRec */
+      /* select field: $fieldName */
+      lithic_record_select($cRec, $cField);
+      return ($retTy)0; /* placeholder */ |]
+  other ->
+    let cExpr = cgenExprTag other
+    in blk [c|
+      /* unsupported(phase10-c2): body form $cExpr */
+      return ($retTy)0; /* placeholder */
+    |]
+    
+-- ─── Expression-level value emission ─────────────────────────────────────────
+
+-- | Emit a C expression for a simple Core expression that can appear inline
+-- (e.g. as the RHS of a @let@ local or a global constant initialiser).
+-- Only @CLit@ and @CVar@ are precisely lowered; all other forms emit a typed
+-- zero placeholder.
+cgenExprValue :: CoreExpr -> Text
+cgenExprValue = \case
+  CLit _ lit     -> cgenLiteralValue lit
+  CVar _ varName -> varName
+  other          -> "/* unsupported-rhs:" <> cgenExprTag other <> " */ (intptr_t)0"
+
+-- | Emit a C literal expression for a Lithic literal value.
+cgenLiteralValue :: Literal -> Text
+cgenLiteralValue = \case
+  LInt n      -> "(int64_t)" <> tshow n
+  LBool True  -> "1"
+  LBool False -> "0"
+  LFloat f    -> "(double)" <> T.pack (show f)
+  LString s   -> "\"" <> cgenEscapeString s <> "\""
+
+-- | Escape a Lithic string literal for embedding in a C double-quoted string.
+cgenEscapeString :: Text -> Text
+cgenEscapeString = T.concatMap escapeChar
   where
-    go n (CLam _ _ body) = go (n + 1) body
-    go 0 _ = Nothing
-    go n body = Just (n, body)
+    escapeChar '"'  = "\\\""
+    escapeChar '\\' = "\\\\"
+    escapeChar '\n' = "\\n"
+    escapeChar '\t' = "\\t"
+    escapeChar '\r' = "\\r"
+    escapeChar ch    = T.singleton ch
 
--- | Convert a declaration name into a C-safe function identifier.
-cFunctionName :: Text -> Text
-cFunctionName name = "lithic_" <> T.map normalize name
-  where
-    normalize ch
-      | isAlphaNum ch || ch == '_' = ch
-      | otherwise = '_'
-
--- | Compact show helper.
-tshow :: forall a. Show a => a -> Text
-tshow = T.pack . show
+-- ─── Scaffold helpers ─────────────────────────────────────────────────────────
 
 -- | Return a compact constructor tag for scaffold diagnostics / comments.
 cgenExprTag :: CoreExpr -> Text
@@ -110,53 +302,7 @@ cgenExprTag = \case
   CRecord{}  -> "CRecord"
   CSelect{}  -> "CSelect"
 
--- | Emit the current Phase-10 C2 function-body scaffold.
--- Supports explicit first-pass call-shape placeholders and a uniform unsupported fallback.
-cgenFunctionBody :: CoreExpr -> Text
-cgenFunctionBody = \case
-  CLit _ lit ->
-    "  /* emit literal: " <> cgenLiteralTag lit <> " */\n"
-    <> "  return;\n"
-  CVar _ varName ->
-    "  /* variable terminal: " <> varName <> " */\n"
-    <> "  return;\n"
-  CLet _ pat rhs body ->
-    "  /* let binding: " <> cgenPatternTag pat <> " */\n"
-    <> "  /* let rhs: " <> cgenExprTag rhs <> " */\n"
-    <> cgenFunctionBody body
-  CApp _ fn arg ->
-    "  /* app fn: " <> cgenExprTag fn <> " */\n"
-    <> "  /* app arg: " <> cgenExprTag arg <> " */\n"
-    <> "  /* TODO(phase10-c2): lower application call */\n"
-    <> "  lithic_unsupported_fn(0);\n"
-    <> "  return;\n"
-  CCase _ scrut branches ->
-    "  /* case scrut: " <> cgenExprTag scrut <> " */\n"
-    <> "  /* case branches: " <> tshow (length branches) <> " */\n"
-    <> "  switch (0) {\n"
-    <> cgenCaseBranchStubs branches
-    <> "    default:\n"
-    <> "      break;\n"
-    <> "  }\n"
-    <> "  return;\n"
-  CVariant _ ctor payload ->
-    "  /* variant ctor: " <> ctor <> " */\n"
-    <> "  /* variant payload: " <> cgenExprTag payload <> " */\n"
-    <> "  lithic_variant_make(" <> cgenVariantTag ctor <> ", " <> cgenCallArg payload <> ");\n"
-    <> "  return;\n"
-  CRecord _ fields ->
-    "  /* record field count: " <> tshow (length fields) <> " */\n"
-    <> "  lithic_record_make(" <> tshow (length fields) <> ");\n"
-    <> "  return;\n"
-  CSelect _ recordExpr fieldName ->
-    "  /* select record: " <> cgenExprTag recordExpr <> " */\n"
-    <> "  /* select field: " <> fieldName <> " */\n"
-    <> "  lithic_record_select(" <> cgenCallArg recordExpr <> ", " <> cgenFieldTag fieldName <> ");\n"
-    <> "  return;\n"
-  other ->
-    cgenUnsupportedBody other
-
--- | Emit a compact pattern tag for placeholder let-binding comments.
+-- | Compact pattern tag for placeholder let-binding comments.
 cgenPatternTag :: CorePattern -> Text
 cgenPatternTag = \case
   CPVar{}      -> "CPVar"
@@ -165,7 +311,7 @@ cgenPatternTag = \case
   CPVariant{}  -> "CPVariant"
   CPRecord{}   -> "CPRecord"
 
--- | Emit a compact literal kind tag for placeholder body comments.
+-- | Compact literal kind tag used in call-argument placeholders.
 cgenLiteralTag :: Literal -> Text
 cgenLiteralTag = \case
   LInt{}    -> "Int"
@@ -174,28 +320,22 @@ cgenLiteralTag = \case
   LBool{}   -> "Bool"
 
 -- | Emit a first-pass call argument placeholder.
--- Variable and literal args get simple emitted forms; all others stay explicit placeholders.
 cgenCallArg :: CoreExpr -> Text
 cgenCallArg = \case
-  CVar _ argName -> "/* var:" <> argName <> " */ 0"
-  CLit _ lit -> "/* lit:" <> cgenLiteralTag lit <> " */ 0"
-  other -> "/* unsupported-call-arg:" <> cgenExprTag other <> " */ 0"
+  CVar _ argName -> "/* var:" <> argName <> " */ (intptr_t)0"
+  CLit _ lit     -> "/* lit:" <> cgenLiteralTag lit <> " */ (intptr_t)0"
+  other          -> "/* unsupported-call-arg:" <> cgenExprTag other <> " */ (intptr_t)0"
 
--- | Emit a first-pass variant tag placeholder for constructor names.
+-- | Emit a first-pass variant-tag placeholder for a constructor name.
 cgenVariantTag :: Text -> Text
-cgenVariantTag ctor = "/* ctor:" <> ctor <> " */ 0"
+cgenVariantTag ctor = "/* ctor:" <> ctor <> " */ (intptr_t)0"
 
--- | Emit a first-pass field tag placeholder for record selection.
+-- | Emit a first-pass field-tag placeholder for record selection.
 cgenFieldTag :: Text -> Text
-cgenFieldTag fieldName = "/* field:" <> fieldName <> " */ 0"
+cgenFieldTag fieldName = "/* field:" <> fieldName <> " */ (intptr_t)0"
 
--- | Emit a normalized unsupported marker for body forms not yet lowered.
-cgenUnsupportedBody :: CoreExpr -> Text
-cgenUnsupportedBody expr =
-  "  /* unsupported(phase10-c2): body form " <> cgenExprTag expr <> " */\n"
-
--- | Emit a first-pass switch skeleton for case branches.
--- Branch patterns/bodies are surfaced as comments to keep generation explicit and compilable.
+-- | Emit a @switch@ skeleton for case branches.
+-- Branch patterns and bodies are surfaced as comments to keep output compilable.
 cgenCaseBranchStubs :: [(CorePattern, CoreExpr)] -> Text
 cgenCaseBranchStubs branches =
   T.concat (zipWith emit [0 :: Int ..] branches)
@@ -206,10 +346,22 @@ cgenCaseBranchStubs branches =
       \      /* body: " <> cgenExprTag body <> " */\n\
       \      break;\n"
 
--- | Build equiv of intercalation for generated chunks.
+-- ─── Utilities ────────────────────────────────────────────────────────────────
+
+-- | Convert a Lithic declaration name into a C-safe identifier.
+cFunctionName :: Text -> Text
+cFunctionName name = "lithic_" <> T.map normalize name
+  where
+    normalize ch
+      | isAlphaNum ch || ch == '_' = ch
+      | otherwise                  = '_'
+
+-- | Compact @show@ helper.
+tshow :: forall a. Show a => a -> Text
+tshow = T.pack . show
+
+-- | Interleave a separator @Builder@ between a list of @Builder@s.
 intercalateBuilders :: TB.Builder -> [TB.Builder] -> TB.Builder
-intercalateBuilders _ [] = mempty
-intercalateBuilders _ [x] = x
+intercalateBuilders _ []       = mempty
+intercalateBuilders _ [x]      = x
 intercalateBuilders sep (x:xs) = x <> sep <> intercalateBuilders sep xs
-
-

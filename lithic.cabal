@@ -1,6 +1,6 @@
 cabal-version:      3.4
 name:               lithic
-version:            0.9.10.0
+version:            0.9.11.0
 build-type:         Simple
 license:            NONE
 author:             Eric Vincent (arch)
@@ -20,7 +20,10 @@ common shared
         brick,
         vty,
         vty-crossplatform,
-        containers
+        containers,
+        neat-interpolation,
+        template-haskell
+
     default-extensions:
         BlockArguments
         LambdaCase
@@ -43,6 +46,7 @@ library
                     , Compiler.TypeChecker
                     , Compiler.REPL
                     , Compiler.TUI
+                    , Compiler.QQ
     build-depends:    base >= 4.19 && < 5
                     , bluefin
                     , generic-lens
