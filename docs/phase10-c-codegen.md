@@ -198,6 +198,12 @@ Interpolation policy now used in this slice:
 3. `blk` appends one trailing newline; `blks` appends two.
 4. CGen output tests treat separator boundaries as newline-shape tolerant to avoid brittle assumptions around interpolation formatting.
 
+Style rule for "blocks that need interpolation":
+
+1. Use `[c| ... |]` for multi-line C blocks, brace-delimited statement sections, or templates with multiple interpolated values.
+2. Use plain `Text` concatenation for short/simple fragments where interpolation would be noisier than direct concatenation.
+3. Do not over-apply interpolation; choose the smallest construct that keeps emitted C shape clear and predictable.
+
 Near-term follow-up (post-normalization):
 
 1. Replace `switch (0)` with real discriminant lowering once tag model is finalized.

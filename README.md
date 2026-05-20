@@ -115,6 +115,12 @@ Phase 10 C backend text emission uses interpolation helpers in `Compiler.QQ`:
 - `blk` appends one trailing newline.
 - `blks` appends two trailing newlines.
 
+Use interpolation only where it improves block readability/maintainability:
+
+- Prefer `[c| ... |]` for multi-line statement blocks, brace blocks, or templates with multiple interpolated values.
+- Prefer simple `Text` concatenation for tiny fragments (single token/tag/literal concatenations) where interpolation adds noise.
+- Keep separator intent explicit by using `blk`/`blks` instead of ad hoc newline strings whenever possible.
+
 When editing CGen templates, keep newline behavior explicit and stable so snapshot tests remain deterministic.
 
 For concrete runnable behavior snapshots, inspect `test/fixtures/` and matching outputs in `test/golden/`, especially `record-basic`, `row-shift`, `lens-set`, `lens-modify`, `variant-basic`, `literals`, `minus-basic`, and `minus-precedence`.
