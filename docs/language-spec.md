@@ -402,6 +402,11 @@ Current REPL-visible categories:
 - Successful persisted definition submission: `[Decl] <name>` then `[Type] <show type>` then `[C] <generated scaffold>`
 - Successful signature-only declaration submission: `[Decl] <name> (signature accepted; persistence deferred in this slice)`
 
+Current C2.1 codegen diagnostic note:
+1. Declaration codegen still requires monomorphic declaration types.
+2. When a declaration type includes unresolved polymorphism at the CGen boundary, the emitted `[C]` block includes:
+       `codegen error: program is not fully monomorphic; instantiate before code generation`.
+
 Contract requirements:
 1. Diagnostics carry precise `Span` whenever an originating token/node exists.
 2. Parser and checker should prefer targeted spans over coarse enclosing spans.

@@ -53,6 +53,7 @@ In the REPL:
 - Phase-7 behavior: case exhaustiveness and unreachable-branch checks are enforced for both finite constructor universes and the current open-universe cases supported by the pattern analysis.
 - Successful expression input is rendered as `[AST] <show ast>`, then `[Type] <show type>`, then an explicit codegen status line (`[C] (expression codegen not yet supported in REPL; declaration-only for now)`).
 - Successful declaration input is rendered as `[Decl] <name>` and then `[Type] <show type>` for persisted definitions, or `[Decl] <name> (signature accepted; persistence deferred in this slice)` for signature-only declarations. Declaration submissions also emit a `[C]` block with the current generated C scaffold.
+- For polymorphic declarations in the REPL (for example `id x = x`), C emission now reports an explicit monomorphism guard diagnostic inside the `[C]` block (`codegen error: program is not fully monomorphic; instantiate before code generation`).
 - Lexing, parsing, and type errors are shown inline in the same pane.
 - Press Enter to submit the current editor contents.
 - Enter `:quit` or press Ctrl-C to exit the session.
@@ -104,6 +105,23 @@ These forms are planned to land with declaration-group parsing and will elaborat
 - [Rank-2 Types and Skolemization](docs/higher-rank-types.md) gives a deeper conceptual treatment of higher-rank polymorphism, why rank-2 requires top-down checking, and how rigid skolems protect soundness.
 - [Project Plan and Architecture Record](docs/project-plan.md) captures the longer-term language vision, locked-in architectural decisions, and the current phase roadmap.
 - [Optimizations and Technical Debt](docs/optimizations.md) describes performance bottlenecks and issues to be addressed in the future.
+
+## CGen Interpolation Notes
+
+Phase 10 C backend text emission uses interpolation helpers in `Compiler.QQ`:
+
+- `c` is the neat-interpolation quasiquoter used as `[c| ... |]` for multi-line C blocks.
+- `[c| ... |]` preserves embedded trailing newlines in the quoted block.
+- `blk` appends one trailing newline.
+- `blks` appends two trailing newlines.
+
+Use interpolation only where it improves block readability/maintainability:
+
+- Prefer `[c| ... |]` for multi-line statement blocks, brace blocks, or templates with multiple interpolated values.
+- Prefer simple `Text` concatenation for tiny fragments (single token/tag/literal concatenations) where interpolation adds noise.
+- Keep separator intent explicit by using `blk`/`blks` instead of ad hoc newline strings whenever possible.
+
+When editing CGen templates, keep newline behavior explicit and stable so snapshot tests remain deterministic.
 
 For concrete runnable behavior snapshots, inspect `test/fixtures/` and matching outputs in `test/golden/`, especially `record-basic`, `row-shift`, `lens-set`, `lens-modify`, `variant-basic`, `literals`, `minus-basic`, and `minus-precedence`.
 

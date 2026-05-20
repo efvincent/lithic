@@ -101,6 +101,37 @@ Keep phases highly decoupled and preserve clear subsystem boundaries.
 - Assume Linux-first environments for operational guidance.
 - Prefer dense, rigorous, performance-aware, thread-safe recommendations over beginner-focused explanations.
 
+### CGen Text-Template Policy
+
+- C backend text templates should use `Compiler.QQ` helpers:
+  - `c` for interpolation blocks (`[c| ... |]`)
+  - `blk` to append exactly one trailing newline
+  - `blks` to append exactly two trailing newlines
+- Treat newline boundaries as part of the CGen output contract; avoid mixing ad hoc `"\n"` concatenation where `blk`/`blks` already define the separator policy.
+- Keep CGen tests resilient to interpolation formatting details by asserting semantic separators/markers, not fragile exact full-text snapshots for every line break.
+
+### CGen Interpolation Decision Rules
+
+- Use interpolation blocks (`[c| ... |]`) only for blocks that need it, such as:
+  - multi-line C templates,
+  - blocks with 2+ interpolated values,
+  - brace-delimited statement blocks where readable indentation matters,
+  - comment+statement templates emitted as one cohesive unit.
+- Prefer plain `Text` concatenation for small/simple fragments:
+  - single tokens or short single-line literals,
+  - helper tags (`/* ... */`) with one value,
+  - trivial suffix/prefix assembly.
+- Do not force interpolation for every emitted line; keep the smallest readable construct.
+
+### Patch Guidance for CGen (When Instructing User Edits)
+
+- For `src/Compiler/CGen.hs`, provide scoped patch instructions that preserve the existing interpolation style in the touched block.
+- In patch instructions, call out newline behavior explicitly when relevant:
+  - `[c| ... |]` preserves embedded trailing newlines,
+  - `blk` appends one trailing newline,
+  - `blks` appends two trailing newlines.
+- If changing separators or boundaries, mention expected emitted shape in the patch note (for example: "exactly one blank line between declarations").
+
 ## Grammar and Syntax Decisions (Strictly Enforced)
 
 ### Term-Level Syntax

@@ -1,5 +1,20 @@
 # Revision history for lithic
 
+## 0.9.11.0 -- 2026-05-20 (Phase 10 C2.1 Emission + QQ Interpolation Policy)
+
+* Phase 10 C2.1 progress (`Compiler.CGen` / `Compiler.REPL`):
+	* CGen now consumes declaration/type pairs and emits typed top-level signatures when zonked type data is available.
+	* Scalar terminal lowering in function bodies now emits concrete C returns for literals and variables.
+	* `CLet` with `CPVar` lowers to stack locals (`intptr_t`) and recurses into the lowered body.
+	* Declaration-level monomorphism guard is active for unresolved declaration types and emits explicit CGen diagnostics in the generated `[C]` block.
+* C template generation policy:
+	* Introduced `Compiler.QQ` (`c`, `blk`, `blks`) for interpolation-driven C block generation.
+	* Newline contract is now explicit: `[c| ... |]` preserves block text, `blk` appends one newline, `blks` appends two.
+* Test/doc synchronization:
+	* `Test.CGen` assertions updated for interpolation-aware separator boundaries and current monomorphism diagnostic wording.
+	* `Test.Phase9HScaffold` declaration C-output assertion updated to match current REPL CGen diagnostic output.
+	* README/language spec/project plan/Phase 10 notes updated for C2.1 status and QQ interpolation conventions.
+
 ## 0.9.10.0 -- 2026-05-18 (Phase 10 C Backend Scaffold)
 
 * Phase 10 C backend scaffold (`Compiler.CGen`):
