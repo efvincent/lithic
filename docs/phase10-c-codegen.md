@@ -1,7 +1,43 @@
 # Phase 10 Scaffold: C Code Generation First Pass
 
-Status: C2.2 call/case/variant/select contracts landed + C4.2 compile-gate tests landed (2026-05-23)
-Branch: feat/phase10-c2-2-callcase-lowering
+Status: C2.2 call/case/variant/select lowering merged on main (PR #28) + C4.3 fixture-level emit/compile integration landed (2026-05-23)
+Branch: main (post-merge baseline)
+
+## Immediate Next Slice (C3.1/C4.4)
+
+Goal: deepen runtime representation while keeping compile-first validation deterministic and fast.
+
+Design decision for this slice:
+
+1. Large static runtime C blocks (prelude/helper implementations) should move out of large inline Haskell text blocks and into a dedicated C template resource.
+2. The template should be embedded at compile time into the executable (not runtime file loading, and not shipping a separate source file).
+3. Haskell CGen keeps ownership of dynamic interpolation boundaries only (declaration count, emitted declarations, and small shape-specific snippets).
+
+Recommended execution order:
+
+1. Runtime helper representation (C3.1):
+  - Introduce explicit first-pass structs for record and variant carriers used by helper boundaries.
+  - Keep helper signatures value-returning (`intptr_t`) at call sites while confining representation details inside helper implementations.
+  - Add compile-time template embedding boundary for static C prelude text (for example via a build-time embedding step) and keep the generated output contract unchanged.
+  - Preserve current placeholder fallback markers for unsupported Core forms.
+2. Fixture-level emit/compile gate (C4.3):
+  - Add focused `test/fixtures` declaration inputs for identity, variant match, and record/select paths.
+  - Add test coverage that runs `--emit-c` on fixtures and compiles emitted files with `gcc -std=c11 -Wall -Wextra -Werror -c`.
+  - Keep output checks semantic (markers/contracts), not brittle whole-file snapshots.
+3. Runtime execution sanity gate (C4.4):
+  - For a tiny monomorphic subset, add compile+link+run checks (opt-in or narrowly scoped) to validate observed result shape beyond `-c` object checks.
+
+Current landing status:
+
+1. C4.3 fixture-level emit/compile integration is now landed in `Test.CLIEmitC` with dedicated fixtures for declaration emit paths (`decl-signature-equation`, `emitc-record-select`, `emitc-variant`).
+2. `gcc -std=c11 -Wall -Wextra -Werror -c` compile checks run on emitted C at CLI integration level.
+
+Definition of done for C3.1/C4.4:
+
+1. Existing CGen unit tests and CLI `--emit-c` integration tests remain green.
+2. New fixture-level emit/compile tests pass under Linux `gcc`.
+3. Static C prelude/helper text is sourced from a compile-time embedded resource, not a large inline literal in `Compiler.CGen`.
+4. `README.md` and `docs/project-plan.md` stay aligned with the supported backend surface.
 
 ## Scope
 
