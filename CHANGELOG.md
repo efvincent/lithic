@@ -1,5 +1,30 @@
 # Revision history for lithic
 
+## 0.9.12.0 -- 2026-05-23 (Phase 10 C2.2 + C4.1/C4.2 Contracts)
+
+* CLI integration:
+	* `lithic-cli` now supports `--emit-c <input.lithic>` and `--emit-c <input.lithic> -o <output.c>`.
+	* In emit mode, the executable bypasses the Brick TUI path and runs lexer -> parser -> typecheck -> elaboration -> `cgenProgram`, then writes a `.c` translation unit.
+* Diagnostics/constraints:
+	* Emit mode rejects bare top-level expressions and currently requires declaration inputs.
+	* Code generation remains monomorphism-gated; unresolved polymorphic programs emit explicit backend diagnostics in generated output.
+* Test/doc follow-up (C3.0/C4.2 contracts):
+	* `Test.CGen` now includes `gcc -std=c11 -Wall -Wextra -Werror -c` compile checks for representative generated C output.
+	* Added `CLI --emit-c Integration` tests to exercise executable-path behavior end-to-end (default output path, explicit `-o` path, and bare-expression rejection).
+	* Added runtime-helper ABI contract assertions requiring value-returning helper signatures in the generated prelude (`lithic_variant_make`, `lithic_record_make`, `lithic_record_select`).
+	* Added an explicit unused-parameter contract check to keep generated functions warning-clean under strict `-Werror` compilation.
+	* Updated `docs/phase10-c-codegen.md` and `docs/project-plan.md` to mark post-C2.2 priority ordering: runtime-helper ABI consistency, compile validation, then deeper runtime representation work.
+	* Updated `README.md` with current `--emit-c` usage and constraints.
+* Phase 10 C2.2 contracts (test/doc lock-in):
+	* `Test.CGen` now asserts supported `CApp` var-call lowering emits a direct C call return and no longer permits the bare `lithic_unsupported_fn(0)` marker on supported shapes.
+	* Added literal-int `CCase` lowering contract assertions for scrutinee temporary materialization, ordered branch guard emission, and branch-order markers.
+	* Added variant/select contract assertions for explicit intermediate temporaries before runtime helper calls.
+	* Added explicit fallback-marker assertions for unsupported call targets and unsupported case patterns.
+	* Compile-gate coverage now includes identity, variant-helper, record-helper, and select-helper emitted translation units.
+* Documentation sync:
+	* `docs/phase10-c-codegen.md` C2.2 checklist now records concrete emitted-marker contracts used by the new tests.
+	* `docs/project-plan.md` status updated to reflect C2.2/C4.2 tests/docs are locked and implementation remains in `Compiler.CGen`.
+
 ## 0.9.11.0 -- 2026-05-20 (Phase 10 C2.1 Emission + QQ Interpolation Policy)
 
 * Phase 10 C2.1 progress (`Compiler.CGen` / `Compiler.REPL`):

@@ -20,6 +20,19 @@ Run the golden test suite explicitly:
 cabal test lithic-test
 ```
 
+Emit C from a declaration file:
+
+```bash
+cabal run lithic-cli -- --emit-c path/to/input.lithic
+cabal run lithic-cli -- --emit-c path/to/input.lithic -o path/to/output.c
+```
+
+Current `--emit-c` constraints:
+
+- Input must parse as a top-level declaration (bare expressions are rejected).
+- Current path accepts named function declarations (`f x = ...`).
+- Emission is monomorphism-gated; unresolved polymorphism is reported as a codegen diagnostic.
+
 Golden cases are discovered from `test/fixtures/*.lithic` and compared against matching snapshots in `test/golden/*.golden`.
 
 In the REPL:
