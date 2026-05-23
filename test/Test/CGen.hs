@@ -9,11 +9,14 @@ module Test.CGen
 import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
 import Data.List (isPrefixOf, tails)
+import Control.Exception (bracket)
+import System.Directory (doesFileExist, removeFile)
 import System.Exit (ExitCode(..))
+import System.IO (hClose, openTempFile)
 import System.Process (readProcessWithExitCode)
 
 import Test.Tasty (TestTree, testGroup)
-import Test.Tasty.HUnit (testCase, (@?))
+import Test.Tasty.HUnit (assertFailure, testCase, (@?))
 
 import Compiler.AST (Span(..), Type(..))
 import Compiler.AST.Core (CoreDecl(..), CoreExpr(..), CorePattern(..))
@@ -332,23 +335,35 @@ cgenUnitTests =
 -- | Compile generated C in a one-shot gcc syntax/object check.
 -- This keeps Phase 10 backend validation local to CGen tests.
 assertCompilesWithGcc :: String -> T.Text -> IO ()
-assertCompilesWithGcc tag cSrc = do
-  let cPath = "/tmp/lithic-cgen-" <> tag <> ".c"
-      oPath = "/tmp/lithic-cgen-" <> tag <> ".o"
-  TIO.writeFile cPath cSrc
-  (exitCode, stdOut, stdErr) <- readProcessWithExitCode
-    "gcc"
-    ["-std=c11", "-Wall", "-Wextra", "-Werror", "-c", cPath, "-o", oPath]
-    ""
-  case exitCode of
-    ExitSuccess -> pure ()
-    ExitFailure _ ->
-      error
-        (unlines
-          [ "Expected generated C to compile with gcc, but compilation failed."
-          , "Source file: " <> cPath
-          , "stdout:"
-          , stdOut
-          , "stderr:"
-          , stdErr
-          ])
+assertCompilesWithGcc tag cSrc =
+  withTempArtifact tag ".c" \cPath ->
+    withTempArtifact tag ".o" \oPath -> do
+      TIO.writeFile cPath cSrc
+      (exitCode, stdOut, stdErr) <- readProcessWithExitCode
+        "gcc"
+        ["-std=c11", "-Wall", "-Wextra", "-Werror", "-c", cPath, "-o", oPath]
+        ""
+      case exitCode of
+        ExitSuccess -> pure ()
+        ExitFailure _ ->
+          assertFailure
+            (unlines
+              [ "Expected generated C to compile with gcc, but compilation failed."
+              , "Source file: " <> cPath
+              , "stdout:"
+              , stdOut
+              , "stderr:"
+              , stdErr
+              ])
+
+-- | Create a unique temporary artifact path and remove it after use.
+withTempArtifact :: String -> String -> (FilePath -> IO a) -> IO a
+withTempArtifact tag ext = bracket create cleanup
+  where
+    create = do
+      (path, handle) <- openTempFile "/tmp" ("lithic-cgen-" <> tag <> "-XXXXXX" <> ext)
+      hClose handle
+      pure path
+    cleanup path = do
+      exists <- doesFileExist path
+      if exists then removeFile path else pure ()

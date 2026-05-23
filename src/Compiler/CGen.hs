@@ -328,19 +328,36 @@ cgenLiteralCaseBranch retTy scrutTmp ix (pat, body) =
       branchTag = "/* case branch " <> tshow ix <> " */"
       prefix    = if ix == 0 then "if" else "else if"
   in case pat of
-    CPLit _ lit ->
-      let cmp = cgenLiteralValue lit
+    CPLit _ (LInt n) ->
+      let cmp = "(int64_t)" <> tshow n
       in [c|
         $branchTag
         $prefix ($scrutTmp == $cmp) {
           $bodyText
         }
       |]
-    CPVar _ _ ->
-      -- variable binder: tread as wildcard catch-all, bind has no narrowing effect yet
-      branchTag <> "else {\n" <> bodyText <> "}\n"
+    CPLit _ unsupportedLit ->
+      let litTag = tshow unsupportedLit
+      in [c|
+        $branchTag
+        /* unsupported-case-literal: $litTag */
+        return ($retTy)0; /* placeholder */
+      |]
+    CPVar _ varName ->
+      [c|
+        $branchTag
+        else {
+          intptr_t $varName = (intptr_t)$scrutTmp;
+          $bodyText
+        }
+      |]
     CPWildcard _ ->
-      branchTag <> "\n" <> "else {\n" <> bodyText <> "}\n"
+      [c|
+        $branchTag
+        else {
+          $bodyText
+        }
+      |]
     unsupported ->
       let patTag = cgenPatternTag unsupported
       in [c|
@@ -373,7 +390,7 @@ cgenPatternTag = \case
 
 -- | Compute a deterministic integer tag for a constructor or field name.
 -- Uses a polynomial rolling hash over Unicode code points so distinct names
--- reliably produce distinct @intptr_t@ values at the small-program scal of Phase 10.
+-- reliably produce distinct @intptr_t@ values at the small-program scale of Phase 10.
 -- Collision handling is deferred to the nominal-type layout work in Phase 14.
 nameToTag :: Text -> Int
 nameToTag = T.foldl' (\acc ch -> acc * 31  + fromEnum ch) 0

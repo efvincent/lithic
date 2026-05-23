@@ -47,7 +47,6 @@ library
                     , Compiler.REPL
                     , Compiler.TUI
                     , Compiler.QQ
-    build-depends: 
     hs-source-dirs:   src
     default-language: GHC2024
 
