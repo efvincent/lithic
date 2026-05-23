@@ -1,7 +1,7 @@
 # Phase 10 Scaffold: C Code Generation First Pass
 
-Status: C2.1 in progress (2026-05-20) — typed signatures + literal/var/let emission landed
-Branch: feat/phase10-c2-emission
+Status: C2.2 call/case/variant/select contracts landed + C4.2 compile-gate tests landed (2026-05-23)
+Branch: feat/phase10-c2-2-callcase-lowering
 
 ## Scope
 
@@ -210,7 +210,108 @@ Near-term follow-up (post-normalization):
 2. Introduce concrete value temporaries/ABI for call and record helper stubs.
 3. Wire runtime helper declarations (`lithic_variant_make`, `lithic_record_make`, `lithic_record_select`) into generated prelude or support runtime.
 
-## Immediate Next Slice (C2.1) — Actual C Emission
+## Immediate Next Slice (C2.2) — Call/Case/Variant Lowering Pass
+
+Branch: `feat/phase10-c2-2-callcase-lowering`
+
+Goal: move from typed scalar/literal lowering to first-pass executable control/data lowering while preserving compile-safe output.
+
+### C2.2 Scope
+
+1. Replace `CApp` placeholder return path with first-pass callable emission shape.
+2. Replace `CCase` `switch (0)` skeleton with scrutinee-driven control flow for literal/int heads.
+3. Tighten `CVariant` and `CSelect` placeholders to use explicit intermediate temporaries and typed coercion boundaries.
+4. Keep unsupported forms explicit and compilable with deterministic markers.
+
+### C2.2 Implementation Checklist
+
+1. `CApp`:
+  - introduce a minimal call-target/value convention,
+  - emit call statements that compile under current placeholder runtime helpers,
+  - preserve fallback diagnostics for unsupported call-target shapes.
+2. `CCase`:
+  - lower literal scrutinee branches to concrete `if`/`else` or `switch` over emitted scrutinee value,
+  - preserve branch-order semantics,
+  - keep default/unmatched behavior explicit.
+3. `CVariant`/`CSelect`:
+  - materialize intermediate temporaries to avoid repeated expression emission,
+  - keep helper API placeholders stable until C3 runtime layout is finalized.
+4. Newline/template policy:
+  - continue using `Compiler.QQ` `c`/`blk`/`blks`,
+  - preserve separator boundaries required by `Test.CGen`.
+
+### C2.2 Test Additions
+
+Add focused tests in `test/Test/CGen.hs` for:
+
+1. concrete app-lowering shape for supported var-call forms:
+  - emitted direct call return marker: `return (intptr_t)f(x);`
+  - no retained bare unsupported call marker: `lithic_unsupported_fn(0);`
+2. case lowering over literal-int scrutinees:
+  - emitted scrutinee temp marker: `int64_t lithic_case_scrut = (int64_t)2;`
+  - concrete branch guards:
+    - `if (lithic_case_scrut == (int64_t)1)`
+    - `else if (lithic_case_scrut == (int64_t)2)`
+  - explicit branch-order comments preserved in source order:
+    - `/* case branch 0 */`
+    - `/* case branch 1 */`
+3. variant/select emission with explicit intermediate temporaries:
+  - variant payload temp: `intptr_t lithic_variant_payload_tmp = x;`
+  - select temps:
+    - `intptr_t lithic_select_record_tmp = r;`
+    - `intptr_t lithic_select_field_tmp = ...`
+4. fallback diagnostics for unsupported call/case forms:
+  - unsupported call target marker: `unsupported-call-target: CLit`
+  - unsupported case pattern marker: `unsupported-case-pattern: CPVariant`
+
+Validation command:
+
+```sh
+cabal test lithic-test --test-options='--pattern "CGen Unit Tests"'
+```
+
+Exit criteria for C2.2:
+
+1. Existing CGen unit tests remain green.
+2. New C2.2 tests pass and lock emitted call/case skeleton contracts.
+3. Full suite remains green (`cabal test lithic-test`).
+
+## Immediate Next Slice (C3.0/C4.2) — Runtime Helper ABI + Compile Validation
+
+Goal: lock a compile-safe runtime helper ABI boundary and require `gcc -c` success for emitted C on representative monomorphic shapes.
+
+Priority order after C2.2:
+
+1. Runtime-helper ABI contract consistency (`lithic_variant_make`, `lithic_record_make`, `lithic_record_select`) for value-context emission.
+2. C compile validation in tests for currently supported emitted forms.
+3. Runtime representation deepening (closure captures, structural record payload layout, tagged variant payload layout).
+
+### C3.0/C4.2 Checklist
+
+1. Runtime helpers used from `return` expressions must expose value-returning signatures compatible with emitted casts.
+2. Add CGen tests that compile generated C via `gcc -std=c11 -Wall -Wextra -Werror -c`.
+3. Keep compile checks focused on generated translation-unit validity (object build only, no linking/runtime execution yet).
+4. Preserve deterministic output markers expected by existing CGen textual assertions.
+5. Add CLI-level integration coverage for `--emit-c` (default output, explicit `-o`, and bare-expression rejection).
+
+### C3.0/C4.2 Test Additions
+
+Add/maintain tests in `test/Test/CGen.hs` for:
+
+1. Monomorphic identity (`Int -> Int`) generated C compiles successfully with `gcc -c`.
+2. Variant-helper emission path compiles successfully with `gcc -c`.
+3. Prelude helper declarations include value-returning signatures:
+  - `static inline intptr_t lithic_variant_make(...)`
+  - `static inline intptr_t lithic_record_make(...)`
+  - `static inline intptr_t lithic_record_select(...)`
+
+Validation command for this slice:
+
+```sh
+cabal test lithic-test --test-options='--pattern "CGen Unit Tests"'
+```
+
+## Historical Slice Notes (C2.1) — Actual C Emission
 
 Branch: `feat/phase10-c2-emission`
 

@@ -270,7 +270,7 @@ Status: Completed in 0.9.3.0 documentation milestone.
 ### 📅 Phase 10: C Code Generation — First Pass
 * **Objective:** Produce a working end-to-end C backend for the monomorphic subset of Lithic programs. This is an intentionally scoped first pass: prove the zero-runtime concept, establish the code generation pipeline, and emit correct C for the programs that can already be expressed and type-checked. Surface-syntax completeness is explicitly deferred; adding new syntax in Phase 11 will not require touching the backend.
 * **Prerequisites:** Phase 9 top-level Core/Elaborator plumbing (named top-level functions in Core; REPL persistent environment). No other Phase 9 deferred items are required.
-* **Status (May 2026):** Phase 10 C2 scaffold is merged (`feat/phase10-c-codegen`, v0.9.10.0). C2.1 (`feat/phase10-c2-emission`) has landed typed signatures, literal/variable return emission, `let`-to-local lowering for `CPVar`, and monomorphism guard diagnostics in CGen output. Remaining C2.1 work is closure/data lowering and CLI file-emission wiring.
+* **Status (May 2026):** Phase 10 C2 scaffold is merged (`feat/phase10-c-codegen`, v0.9.10.0). C2.1 (`feat/phase10-c2-emission`) landed typed signatures, literal/variable return emission, `let`-to-local lowering for `CPVar`, monomorphism guard diagnostics, and QQ-based interpolation helpers. C2.2 (`feat/phase10-c2-2-callcase-lowering`) contract tests/docs are locked in `test/Test/CGen.hs` and `docs/phase10-c-codegen.md`, with implementation active in `src/Compiler/CGen.hs` (first-pass call/case/variant/select lowering path). C4.1 CLI integration is landed (`lithic-cli --emit-c <input.lithic> [-o <output.c>]`). C4.2 compile-first validation gates are now added in `Test.CGen` (`gcc -std=c11 -Wall -Wextra -Werror -c`) for representative emitted outputs. Next priority is C3 runtime representation depth and fixture-level emit/compile coverage.
 * **Scope (in):**
   * Monomorphic programs only — any `TForall` / `TMeta` surviving zonk is a hard codegen error: "program is not fully monomorphic; instantiate before code generation".
   * Primitive types: `Int` → `int64_t`, `Float` → `double`, `String` → `const char*` (null-terminated, immutable), `Bool` → `int` (`0`/`1`).
@@ -295,12 +295,12 @@ Status: Completed in 0.9.3.0 documentation milestone.
   * [ ] Implement structural record codegen: heap-allocated field array with string-keyed lookup helper.
   * [ ] Implement variant codegen: discriminant integer + payload union.
   * [x] Implement top-level function emission as C named functions with typed signatures (where zonked types are available).
-  * [ ] Implement `let` → stack local, `case` → `switch`/`if-else` chain.
+  * [ ] Implement `let` → stack local, `case` → `switch`/`if-else` chain. (`let` CPVar path landed; case has initial literal-int lowering and needs broader pattern/scrutinee coverage)
   * [x] Implement monomorphism guard: reject any zonked type containing `TForall` or unresolved `TMeta` with a codegen-phase diagnostic.
   * [x] Add interpolation helper module (`Compiler.QQ`) for stable C text templates with explicit newline policies (`c`, `blk`, `blks`).
-  * [ ] Add a `--emit-c` flag to the CLI that runs the full pipeline through `cgenProgram` and writes `.c` output.
+  * [x] Add a `--emit-c` flag to the CLI that runs the full pipeline through `cgenProgram` and writes `.c` output.
   * [ ] Add golden fixtures for a small set of monomorphic programs: identity, factorial, record construction and selection, variant match.
-  * [ ] Validate emitted C compiles and runs correctly with `gcc -std=c11`.
+  * [ ] Validate emitted C compiles and runs correctly with `gcc -std=c11`. (C4.2 adds compile-first `gcc -c` gates in `Test.CGen` as pre-run baseline.)
 
 ### 📅 Phase 11: Surface Syntax Completion (Deferred from Phase 9)
 * **Objective:** Layer back the surface-syntax features that were deferred to unblock Phase 10. All items in this phase are purely front-end (lexer/parser/elaborator); the Phase 10 C backend is unaffected.

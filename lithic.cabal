@@ -1,6 +1,6 @@
 cabal-version:      3.4
 name:               lithic
-version:            0.9.11.0
+version:            0.9.12.0
 build-type:         Simple
 license:            NONE
 author:             Eric Vincent (arch)
@@ -47,20 +47,14 @@ library
                     , Compiler.REPL
                     , Compiler.TUI
                     , Compiler.QQ
-    build-depends:    base >= 4.19 && < 5
-                    , bluefin
-                    , generic-lens
-                    , microlens
-                    , text
     hs-source-dirs:   src
     default-language: GHC2024
 
 executable lithic-cli
     import:           shared
     main-is:          Main.hs
-    build-depends:    base
-                    , lithic
-                    , text
+    build-depends:   lithic
+                    ,filepath 
     hs-source-dirs:   app
     default-language: GHC2024
     ghc-options:      -threaded
@@ -70,6 +64,7 @@ test-suite lithic-test
     other-modules:    Test.Golden
                     , Test.PatternCoverage
                     , Test.CGen
+                    , Test.CLIEmitC
                     , Test.Elaborator
                     , Test.Evaluator
                     , Test.ParserDeclarations
@@ -82,6 +77,8 @@ test-suite lithic-test
                     , text
                     , bytestring
                     , filepath
+                    , directory
+                    , process
                     , tasty
                     , tasty-golden
                     , tasty-hunit

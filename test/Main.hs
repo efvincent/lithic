@@ -3,6 +3,7 @@ module Main where
 import Test.Tasty (defaultMain, testGroup)
 
 import Test.CGen (cgenUnitTests)
+import Test.CLIEmitC (cliEmitCTests)
 import Test.Elaborator (elaboratorUnitTests)
 import Test.Evaluator (evaluatorUnitTests)
 import Test.Golden (discoverGoldenTests)
@@ -17,6 +18,7 @@ main = do
     [ goldenTests
     , patternCoverageUnitTests
     , cgenUnitTests
+    , cliEmitCTests
     , elaboratorUnitTests
     , evaluatorUnitTests
     , parserDeclarationsUnitTests
