@@ -137,9 +137,31 @@ runEmitC cliPath args =
 
 resolveCliPath :: IO FilePath
 resolveCliPath = do
+  (buildEc, buildOut, buildErr) <- readProcessWithExitCode "cabal" ["build", "exe:lithic-cli"] ""
+  case buildEc of
+    ExitSuccess -> pure ()
+    ExitFailure _ ->
+      assertFailure $
+        unlines
+          [ "Failed to build executable via cabal build exe:lithic-cli"
+          , "stdout: " <> buildOut
+          , "stderr: " <> buildErr
+          ]
+
   (ec, stdOut, stdErr) <- readProcessWithExitCode "cabal" ["list-bin", "exe:lithic-cli"] ""
   case ec of
-    ExitSuccess -> pure (rstrip stdOut)
+    ExitSuccess -> do
+      let cliPath = rstrip stdOut
+      exists <- doesFileExist cliPath
+      if exists
+        then pure cliPath
+        else do
+          assertFailure $
+            unlines
+              [ "Resolved CLI path does not exist"
+              , "path: " <> cliPath
+              ]
+          error "unreachable"
     ExitFailure _ -> do
       let msg =
             unlines

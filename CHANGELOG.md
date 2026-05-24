@@ -1,5 +1,39 @@
 # Revision history for lithic
 
+## 0.9.14.0 -- 2026-05-24 (Phase 10 C3.2 Safety Hardening + C4.4 Negative Runtime Coverage)
+
+* Phase 10 C3.2 runtime helper safety hardening:
+	* Added a first-pass boxed-handle registry in `src/Compiler/CGenPrelude.c` so helper accessors validate registered boxed handles before struct dereference.
+	* Added validated decode helpers for variants/records and wired runtime access paths through those helpers.
+	* Hardened variant and record helper behavior so malformed, unknown, null, or wrong-kind handles fail closed to sentinel `0` at helper boundaries.
+	* Kept current Phase 10 ownership model intact (malloc-and-leak), with registry behavior explicitly documented as phase-scoped safety hardening.
+* Phase 10 C4.4 runtime sanity expansion:
+	* Added a negative compile+link+run harness case in `test/Test/CGen.hs` for malformed non-zero variant-case input (`(intptr_t)7`) and locked fallback semantics (`return 0`).
+	* Existing negative runtime cases for wrong-kind and null-handle access remain green alongside positive runtime sanity paths.
+* Validation:
+	* Focused CGen suite: `cabal test lithic-test --test-options='-p "CGen Unit Tests"'` (37 passing).
+	* Full test suite: `cabal test lithic-test` (167 passing).
+* Documentation sync:
+	* Updated `docs/phase10-c-codegen.md` and `docs/project-plan.md` Phase 10 status/next-slice notes to reflect landed C3.2 safety hardening and expanded C4.4 negative runtime coverage.
+
+## 0.9.13.0 -- 2026-05-24 (Phase 10 C3.1 + Initial C4.4 Runtime Sanity)
+
+* Phase 10 C3.1 runtime-template boundary:
+	* Moved large static C prelude/helper text out of inline `Compiler.CGen` literals into a dedicated template resource (`src/Compiler/CGenPrelude.c`).
+	* `Compiler.CGen` now embeds the prelude template at compile time via Template Haskell, preserving generated-output contracts while removing large inline prelude blocks from Haskell source.
+	* Added package source-distribution wiring so the embedded prelude template is tracked as package source.
+* Phase 10 C4.4 runtime sanity gate (initial narrow slice):
+	* Added a compile+link+run unit test in `Test.CGen` for monomorphic identity emission using a tiny C harness.
+	* Expanded compile+link+run sanity coverage with a non-identity variant-helper runtime path check (`lithic_mkOk` returns non-null).
+	* Added compile+link+run coverage for generated record initialization plus field selection roundtrip (`mkRecWithX` + `selRec` returns `42`).
+	* Added compile+link+run coverage for generated variant-case dispatch (`caseVariantFn (mkOk 42)` returns `42`) and locked emitted marker checks for variant tag/payload helper usage.
+	* Added a negative runtime harness case pinning unmatched variant-case fallback semantics (`caseVariantNoMatchFn (mkOk 42)` returns `0`).
+	* Hardened runtime compile/link/run test helper against intermittent `ETXTBSY` (`Text file busy`) by removing pre-created executable temp paths before `gcc -o`.
+	* This extends existing C4.2 compile-only (`gcc -c`) checks with first runtime execution coverage while keeping test runtime small.
+* Documentation sync:
+	* Updated `docs/phase10-c-codegen.md` to mark C3.1 as landed and redefine the immediate next slice as C3.2/C4.4-expansion.
+	* Updated `docs/project-plan.md` Phase 10 status/task checklist to reflect landed compile-time prelude embedding and current C4.4 scope.
+
 ## 0.9.12.0 -- 2026-05-23 (Phase 10 C2.2 + C4.1/C4.2 Contracts)
 
 * CLI integration:
