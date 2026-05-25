@@ -431,7 +431,10 @@ cgenVariantCaseBranch retTy scrutTmp tagTmp ix (pat, body) =
       if ix == 0 then
         blk [c|
           $branchTag
-          if (1) { $bodyText } |]
+          if (1) { 
+            intptr_t $varName = $scrutTmp;
+            $bodyText 
+          } |]
       else 
         blk [c|
           $branchTag
@@ -483,12 +486,14 @@ nameToTag :: Text -> Int
 nameToTag = T.foldl' (\acc ch -> acc * 31  + fromEnum ch) 0
 
 -- | Normalize a computed name tag so generated keys never use @0@.
--- The runtime record helper reserves key @0@ as an empty-slot sentinal, so
+-- The runtime record helper reserves key @0@ as an empty-slot sentinel, so
 -- emitted field tags must remain non-zero.
+-- Affine mapping preserves distinctness of raw hash values (modulo Int overflow)
+-- while keeping @0@ out of the emitted tag space.
 nameToTagNonZero :: Text -> Int
 nameToTagNonZero name =
   let raw = nameToTag name
-  in if raw == 0 then 1 else raw
+  in raw * 2 + 1
 
 -- | Emit a deterministic integer variant-constructor tag.
 -- Preserves the ctor name as an inline C comment for readability.

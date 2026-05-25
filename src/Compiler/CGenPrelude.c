@@ -286,7 +286,7 @@ static inline intptr_t lithic_record_make(intptr_t field_count) {
   if (r == NULL) {
     return (intptr_t)0;
   }
-  
+
   if (!lithic_box_addr_register((uintptr_t)r)) {
     free(r);
     return (intptr_t)0;
@@ -311,6 +311,7 @@ static inline intptr_t lithic_record_select(intptr_t record, intptr_t field) {
   if (r == NULL) {
     return (intptr_t)0;
   }
+
   if (r->field_count < 0) {
     return (intptr_t)0;
   }
