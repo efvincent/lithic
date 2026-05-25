@@ -1,0 +1,1 @@
+[Decl] DeclDef [1,1]..[1,54] (PVar [1,5]..[1,11] "selLong") (RecSelect [1,15]..[1,54] (RecExtend [1,15]..[1,38] "fieldfieldfield" (Lit [1,35]..[1,36] (LInt 42)) (RecEmpty [1,38]..[1,38])) "fieldfieldfield")
