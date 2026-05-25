@@ -311,9 +311,6 @@ static inline intptr_t lithic_record_select(intptr_t record, intptr_t field) {
   if (r == NULL) {
     return (intptr_t)0;
   }
-  if (r->kind != (intptr_t) LITHIC_KIND_RECORD) {
-    return (intptr_t)0;
-  }
   if (r->field_count < 0) {
     return (intptr_t)0;
   }
