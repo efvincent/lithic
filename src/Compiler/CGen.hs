@@ -486,8 +486,10 @@ nameToTag = T.foldl' (\acc ch -> acc * 31 + toInteger (fromEnum ch)) 0
 -- | Normalize a computed name tag so generated keys never use @0@.
 -- The runtime record helper reserves key @0@ as an empty-slot sentinel, so
 -- emitted field tags must remain non-zero.
--- Affine mapping preserves distinctness of raw hash values (modulo Int overflow)
--- while keeping @0@ out of the emitted tag space.
+-- The unbounded hash is reduced into @[0 .. maxBound-1]@ and then shifted by
+-- @+1@ into @[1 .. maxBound]@ to guarantee positivity at helper boundaries.
+-- This bounded normalization can introduce collisions and does not preserve
+-- raw-hash distinctness.
 nameToTagNonZero :: Text -> Int
 nameToTagNonZero name =
   let raw = nameToTag name
