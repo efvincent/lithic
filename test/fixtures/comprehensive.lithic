@@ -1,4 +1,23 @@
+-- Comprehensive fixture: exercises polymorphic lambdas, type-annotated
+-- lambdas, higher-order application, nested record literals with chained
+-- field selection, open-variant type annotations, and case expressions
+-- with literal patterns, wildcard patterns, and a fallback branch.
+-- All stages (parse, type check, elaborate to Core, eval) must succeed.
+
 let id = \x => x in
-let apply = \f => \arg => f arg in
-let const = \x : Int => \y => x in
-apply id const (42 : Int) (id 100)
+let apply = \f => \x => f x in
+let point = { x = 1, meta = { label = "origin" } } in
+let lbl = point.meta.label in
+let pickLabel = \b : Bool =>
+  case b of
+    True  => lbl
+    False => "unknown"
+in
+let classify : Variant { Ok : String, Err : {} | a } -> String =
+  \v => case v of
+    Ok "origin" => "found origin"
+    Ok _        => "found other"
+    Err _       => "error"
+    _           => "unknown"
+in
+apply id (classify (Ok (pickLabel True)))
