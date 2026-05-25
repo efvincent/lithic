@@ -1,0 +1,1 @@
+[Decl] DeclDef [1,1]..[1,21] (PVar [1,5]..[1,7] "sel") (RecSelect [1,11]..[1,21] (RecExtend [1,11]..[1,19] "x" (Lit [1,17]..[1,17] (LInt 1)) (RecEmpty [1,19]..[1,19])) "x")

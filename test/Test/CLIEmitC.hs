@@ -69,6 +69,66 @@ cliEmitCTests =
                 let msg = stdOut <> stdErr
                 assertBool "failure should mention bare expression rejection"
                   ("requires a top-level declaration" `elemIn` msg)
+
+      , testCase "fixture decl-signature-equation emits C and compiles with gcc -c" $ do
+          cliPath <- getCliPath
+          withTempOutputPath \outPath -> do
+            let srcPath = "test/fixtures/decl-signature-equation.lithic"
+            (ec, stdOut, stdErr) <- runEmitC cliPath ["--emit-c", srcPath, "-o", outPath]
+            case ec of
+              ExitSuccess -> pure ()
+              ExitFailure _ ->
+                assertFailure $
+                  unlines
+                    [ "Expected fixture emit-c to succeed"
+                    , "fixture: " <> srcPath
+                    , "stdout: " <> stdOut
+                    , "stderr: " <> stdErr
+                    ]
+            out <- TIO.readFile outPath
+            assertBool "generated C should include fixture declaration marker"
+              (T.isInfixOf "/* definition: id */" out)
+            assertCompilesWithGcc outPath
+
+      , testCase "fixture emitc-record-select emits helper call and compiles with gcc -c" $ do
+          cliPath <- getCliPath
+          withTempOutputPath \outPath -> do
+            let srcPath = "test/fixtures/emitc-record-select.lithic"
+            (ec, stdOut, stdErr) <- runEmitC cliPath ["--emit-c", srcPath, "-o", outPath]
+            case ec of
+              ExitSuccess -> pure ()
+              ExitFailure _ ->
+                assertFailure $
+                  unlines
+                    [ "Expected record/select fixture emit-c to succeed"
+                    , "fixture: " <> srcPath
+                    , "stdout: " <> stdOut
+                    , "stderr: " <> stdErr
+                    ]
+            out <- TIO.readFile outPath
+            assertBool "generated C should include record-select helper call"
+              (T.isInfixOf "lithic_record_select(" out)
+            assertCompilesWithGcc outPath
+
+      , testCase "fixture emitc-variant emits helper call and compiles with gcc -c" $ do
+          cliPath <- getCliPath
+          withTempOutputPath \outPath -> do
+            let srcPath = "test/fixtures/emitc-variant.lithic"
+            (ec, stdOut, stdErr) <- runEmitC cliPath ["--emit-c", srcPath, "-o", outPath]
+            case ec of
+              ExitSuccess -> pure ()
+              ExitFailure _ ->
+                assertFailure $
+                  unlines
+                    [ "Expected variant fixture emit-c to succeed"
+                    , "fixture: " <> srcPath
+                    , "stdout: " <> stdOut
+                    , "stderr: " <> stdErr
+                    ]
+            out <- TIO.readFile outPath
+            assertBool "generated C should include variant helper call"
+              (T.isInfixOf "lithic_variant_make(" out)
+            assertCompilesWithGcc outPath
       ]
 
 runEmitC :: FilePath -> [String] -> IO (ExitCode, String, String)
@@ -77,9 +137,31 @@ runEmitC cliPath args =
 
 resolveCliPath :: IO FilePath
 resolveCliPath = do
+  (buildEc, buildOut, buildErr) <- readProcessWithExitCode "cabal" ["build", "exe:lithic-cli"] ""
+  case buildEc of
+    ExitSuccess -> pure ()
+    ExitFailure _ ->
+      assertFailure $
+        unlines
+          [ "Failed to build executable via cabal build exe:lithic-cli"
+          , "stdout: " <> buildOut
+          , "stderr: " <> buildErr
+          ]
+
   (ec, stdOut, stdErr) <- readProcessWithExitCode "cabal" ["list-bin", "exe:lithic-cli"] ""
   case ec of
-    ExitSuccess -> pure (rstrip stdOut)
+    ExitSuccess -> do
+      let cliPath = rstrip stdOut
+      exists <- doesFileExist cliPath
+      if exists
+        then pure cliPath
+        else do
+          assertFailure $
+            unlines
+              [ "Resolved CLI path does not exist"
+              , "path: " <> cliPath
+              ]
+          error "unreachable"
     ExitFailure _ -> do
       let msg =
             unlines
@@ -123,3 +205,23 @@ rstrip = reverse . dropWhile isSpace . reverse
 
 elemIn :: String -> String -> Bool
 elemIn = isInfixOf
+
+assertCompilesWithGcc :: FilePath -> Assertion
+assertCompilesWithGcc cPath =
+  withTempOutputPath \oPath -> do
+    (ec, stdOut, stdErr) <- readProcessWithExitCode
+      "gcc"
+      ["-std=c11", "-Wall", "-Wextra", "-Werror", "-c", cPath, "-o", oPath]
+      ""
+    case ec of
+      ExitSuccess -> pure ()
+      ExitFailure _ ->
+        assertFailure $
+          unlines
+            [ "Expected emitted C to compile with gcc -c"
+            , "source: " <> cPath
+            , "stdout:"
+            , stdOut
+            , "stderr:"
+            , stdErr
+            ]

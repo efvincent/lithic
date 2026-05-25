@@ -1,4 +1,5 @@
 {-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE TemplateHaskell #-}
 -- | Phase 10 C backend - C2.1 emission.
 -- Emits typed C function signatures and actual C expressions for the monomorphic
 -- first-pass subset: primitive literals, variables, and let-bindings.
@@ -13,7 +14,7 @@ import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Builder as TB
 import Data.Char (isAlphaNum)
-
+import Language.Haskell.TH.Syntax (addDependentFile, makeRelativeToProject, runIO)
 import Compiler.QQ (c, blk, blks)
 import Compiler.AST (Literal(..), Type(..))
 import Compiler.AST.Core (CoreDecl(..), CoreExpr(..), CorePattern(..))
@@ -36,20 +37,18 @@ cgenProgram pairs =
 
 -- | Static C prelude
 cPreludeChunk :: TB.Builder
-cPreludeChunk = TB.fromText cPreludeText
+cPreludeChunk = TB.fromText (blks cPreludeText)
 
--- | Raw prelude text for generated C output
+-- | Raw prelude text for generated C output.
+-- Loaded from a dedicated C template resource at compile time.
 cPreludeText :: Text
-cPreludeText = blks [c|
-    #include <stdint.h>
-    #include <stdbool.h>
-    #include <stdlib.h>
-    #include <stdio.h>
-    /* Lithic Phase 10 C backend */
-    static inline intptr_t lithic_variant_make(intptr_t _tag, intptr_t _payload) { (void)_tag; (void)_payload; return (intptr_t)0; }
-    static inline intptr_t lithic_record_make(intptr_t _field_count) { (void)_field_count; return (intptr_t)0; }
-    static inline intptr_t lithic_record_select(intptr_t _record, intptr_t _field) { (void)_record; (void)_field; return (intptr_t)0; }
-    static inline void lithic_unsupported_fn(intptr_t _arg) { (void)_arg; } |]
+cPreludeText = $(
+  do
+    path <- makeRelativeToProject "src/Compiler/CGenPrelude.c"
+    addDependentFile path
+    src <- runIO (readFile path)
+    [| T.pack src |]
+  )
 
 -- | Emit a declaration-count comment
 cDeclCountComment :: Decls -> TB.Builder
@@ -217,10 +216,8 @@ cgenFunctionBody retTy = \case
         return ($retTy)0;   /* placeholder */ |]
   
   CCase _ scrut branches ->
-    -- C2.2: literal-int scrutinee lowering.
-    -- Materialize scrutinee once into a typed temporary, then emit an
-    -- if/else-if chain preserving branch source order.
-    -- Unsupported scrutinee or pattern shapes retain the explicit fallback marker.
+    -- C3.2: extend case lowering with first-pass variant dispatch support
+    -- while preserving existing literal-int lowering behavior.
     case scrut of
       CLit _ lit@(LInt _) ->
         let scrutTy      = "int64_t"
@@ -234,13 +231,27 @@ cgenFunctionBody retTy = \case
           $branchTexts
           return ($retTy)0; /* default: no branch matched */ |]
 
+      _ | any (isVariantCasePattern . fst) branches ->
+        let scrutTmp = "lithic_case_variant_scrut"
+            tagTmp = "lithic_case_variant_tag"
+            scrutExpr = cgenExprValue scrut
+            scrutDecl = [c|intptr_t $scrutTmp = $scrutExpr; |]
+            tagDecl = [c|intptr_t $tagTmp = lithic_variant_tag($scrutTmp); |]
+            branchTexts = 
+              T.concat $ zipWith (cgenVariantCaseBranch retTy scrutTmp tagTmp) [0::Int ..] branches
+        in blk [c|
+          $scrutDecl
+          $tagDecl
+          $branchTexts
+          return ($retTy)0; /* default: no branch matched */ |]
       unsupportedScrut ->
         let cScrut = cgenExprTag unsupportedScrut
             lBranches = tshow $ length branches
         in blk [c|
-          /* unsupported-case-scrutinee: $cScrut */ 
+          /* unsupported-case-scrutinee: $cScrut */
           /* case branches: $lBranches */
           return ($retTy)0; /* placeholder */ |]
+
 
   CVariant _ ctor payload ->
     -- C2.2: materialise the payload into an explicit temporary before
@@ -253,10 +264,16 @@ cgenFunctionBody retTy = \case
       return ($retTy)lithic_variant_make($ctorTag, $payloadTmp); |]
   
   CRecord _ fields ->
-    let lFields = tshow . length $ fields
+    let lFields   = tshow . length $ fields
+        recTmp    = "lithic_record_tmp"
+        mkRecStmt = [c|intptr_t $recTmp = lithic_record_make($lFields);|]
+        initStmts = T.concat $ zipWith (cgenRecordInitStep recTmp) [0 :: Int ..] fields
     in blk [c|
       /* record field count: $lFields */
-      return ($retTy)lithic_record_make($lFields); |]
+      $mkRecStmt
+      $initStmts
+      return ($retTy)$recTmp;
+    |]
   
   CSelect _ recordExpr fieldName ->
     -- C2.2: materialise both the record expression and the field tag into
@@ -273,7 +290,7 @@ cgenFunctionBody retTy = \case
   other ->
     let cExpr = cgenExprTag other
     in blk [c|
-      /* unsupported(phase10-c2): body form $cExpr */
+      /* unsupported(phase10-c3): body form $cExpr */
       return ($retTy)0; /* placeholder */
     |]
     
@@ -366,6 +383,79 @@ cgenLiteralCaseBranch retTy scrutTmp ix (pat, body) =
       return ($retTy)0; /* placeholder */
       |]
 
+-- | Emit one branch of a variant-scrutinee case chain.
+-- Variant headed branches compare the precomputed variant tag and optionally
+-- bind payloads for @CPVar@ payload binders. Wildcard/variable branches lower
+-- as catch-all fallbacks preserving source order.
+cgenVariantCaseBranch :: Text -> Text -> Text -> Int -> (CorePattern, CoreExpr) -> Text
+cgenVariantCaseBranch retTy scrutTmp tagTmp ix (pat, body) =
+  let bodyText = cgenFunctionBody retTy body
+      branchTag = "/* case branch " <> tshow ix <> " */"
+      guardKw = if ix == 0 then "if" else "else if"
+  in case pat of
+    CPVariant _ ctor innerPat ->
+      let ctorCmp = cgenVariantTag ctor
+      in case innerPat of
+        CPVar _ payloadName -> blk [c|
+          $branchTag
+          $guardKw ($tagTmp == $ctorCmp) {
+            intptr_t $payloadName = lithic_variant_payload($scrutTmp);
+            $bodyText
+          } |]
+        CPWildcard _ -> blk [c|
+          $branchTag
+          $guardKw ($tagTmp == $ctorCmp) {
+            $bodyText
+          } |]
+        unsupportedInner ->
+          let innerTag = cgenPatternTag unsupportedInner
+          in blk [c|
+            $branchTag
+            $guardKw ($tagTmp == $ctorCmp) {
+              /* unsupported-case-pattern-inner: $innerTag */
+              return ($retTy)0; /* placeholder */
+            }
+          |]
+
+    CPWildcard _ ->
+      if ix == 0 then 
+        blk [c|
+          $branchTag
+          if (1) { $bodyText } |]
+      else
+        blk [c|
+          $branchTag
+          else { $bodyText }|]
+
+    CPVar _ varName ->
+      if ix == 0 then
+        blk [c|
+          $branchTag
+          if (1) { 
+            intptr_t $varName = $scrutTmp;
+            $bodyText 
+          } |]
+      else 
+        blk [c|
+          $branchTag
+          else {
+            intptr_t $varName = $scrutTmp;
+            $bodyText } |]
+
+    unsupported ->
+      let patTag = cgenPatternTag unsupported
+      in blk [c|
+        $branchTag
+        /* unsupported-case-pattern: $patTag */
+        return ($retTy)0; /* placeholder */ |]
+
+-- | Return @True@ when a case branch pattern is variant-headed.
+-- Used to select the first-pass variant dispatch lowering path.
+isVariantCasePattern :: CorePattern -> Bool
+isVariantCasePattern = \case
+  CPVariant{} -> True
+  _           -> False
+
 -- | Return a compact constructor tag for scaffold diagnostics / comments.
 cgenExprTag :: CoreExpr -> Text
 cgenExprTag = \case
@@ -395,19 +485,45 @@ cgenPatternTag = \case
 nameToTag :: Text -> Int
 nameToTag = T.foldl' (\acc ch -> acc * 31  + fromEnum ch) 0
 
+-- | Normalize a computed name tag so generated keys never use @0@.
+-- The runtime record helper reserves key @0@ as an empty-slot sentinel, so
+-- emitted field tags must remain non-zero.
+-- Affine mapping preserves distinctness of raw hash values (modulo Int overflow)
+-- while keeping @0@ out of the emitted tag space.
+nameToTagNonZero :: Text -> Int
+nameToTagNonZero name =
+  let raw = nameToTag name
+  in raw * 2 + 1
+
 -- | Emit a deterministic integer variant-constructor tag.
 -- Preserves the ctor name as an inline C comment for readability.
 cgenVariantTag :: Text -> Text
 cgenVariantTag ctor = 
-  let tag = tshow (nameToTag ctor)
+  let tag = tshow (nameToTagNonZero ctor)
    in [c|/* ctor: $ctor */ (intptr_t) $tag|]
 
 -- | Emit a deterministic integer field tag for record selection.
 -- Preserves the field name as an inline C comment for readability.
 cgenFieldTag :: Text -> Text
 cgenFieldTag fieldName =
-  let tag = tshow $ nameToTag fieldName
+  let tag = tshow $ nameToTagNonZero fieldName
    in [c|/* field: $fieldName */ $tag|]
+
+-- | Emit one record-field initialization step for @CRecord@ lowering.
+-- Maps a surface field name to its deterministic integer key, materializes the
+-- field expression into a unique temporary, and emits a call to
+-- @lithic_record_set@ to populate the runtime record carrier.
+-- The @Int@ index is used only to keep generated temporary names stable and
+-- collision-free across fields in the same record literal.
+cgenRecordInitStep :: Text -> Int -> (Text, CoreExpr) -> Text
+cgenRecordInitStep recTmp ix (fieldName, fieldExpr) =
+  let valTmp  = "lithic_record_val_tmp_" <> tshow ix
+      keyExpr = cgenFieldTag fieldName
+      valExpr = cgenExprValue fieldExpr
+  in [c|
+    intptr_t $valTmp = $valExpr;
+    $recTmp = lithic_record_set($recTmp, $keyExpr, $valTmp);
+  |]
 
 -- ─── Utilities ────────────────────────────────────────────────────────────────
 

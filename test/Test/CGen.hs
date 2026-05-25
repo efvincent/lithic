@@ -131,6 +131,16 @@ cgenUnitTests =
           T.isInfixOf "return (intptr_t)0;" out
             @? "unsupported case pattern path should keep compile-safe placeholder return"
 
+    , testCase "variant case lowering uses runtime tag and payload helpers" $
+        let out = cgenProgram [(defVariantCaseDecl, Nothing)]
+         in do
+          T.isInfixOf "intptr_t lithic_case_variant_tag = lithic_variant_tag(lithic_case_variant_scrut);" out
+            @? "variant case lowering should compute a variant tag temp"
+          T.isInfixOf "if (lithic_case_variant_tag ==" out
+            @? "variant case lowering should emit guarded tag comparison branches"
+          T.isInfixOf "intptr_t x = lithic_variant_payload(lithic_case_variant_scrut);" out
+            @? "variant case lowering should bind payload for CPVar payload patterns"
+
     , testCase "declarations are emitted in input order" $
         let out = cgenProgram [(defADecl, Nothing), (defBDecl, Nothing)]
             posA = firstIndex "/* definition: a */" out
@@ -243,6 +253,145 @@ cgenUnitTests =
             @? "record helper should return intptr_t for value-context calls"
           T.isInfixOf "static inline intptr_t lithic_record_select(" out
             @? "select helper should return intptr_t for value-context calls"
+
+    -- ── C4.4 narrow compile/link/run sanity gate ─────────────────────────
+
+    , testCase "generated C for monomorphic identity links and runs with gcc" $
+        let out = cgenProgram
+              [(defIdDecl, Just (TArrow sp0 (TInt sp0) (TInt sp0)))]
+            harness = T.unlines
+              [ "#include <stdint.h>"
+              , "extern int64_t lithic_idFn(int64_t x);"
+              , "int main(void) {"
+              , "  return lithic_idFn((int64_t)7) == (int64_t)7 ? 0 : 1;"
+              , "}"
+              ]
+         in assertCompilesLinksAndRunsWithGcc "id-int-run" out harness
+
+    , testCase "generated C for variant helper path links and runs with gcc" $
+        let out = cgenProgram
+              [(defVariantDecl, Nothing)]
+            harness = T.unlines
+              [ "#include <stdint.h>"
+              , "extern intptr_t lithic_mkOk(intptr_t x);"
+              , "int main(void) {"
+              , "  return lithic_mkOk((intptr_t)7) != (intptr_t)0 ? 0 : 1;"
+              , "}"
+              ]
+         in assertCompilesLinksAndRunsWithGcc "variant-run" out harness
+
+    , testCase "generated C record init/select path links and runs with gcc" $
+        let out = cgenProgram
+              [ (defRecordWithFieldDecl, Nothing)
+              , (defSelectDecl, Nothing)
+              ]
+            harness = T.unlines
+              [ "#include <stdint.h>"
+              , "extern intptr_t lithic_mkRecWithX(void);"
+              , "extern intptr_t lithic_selRec(intptr_t r);"
+              , "int main(void) {"
+              , "  intptr_t r = lithic_mkRecWithX();"
+              , "  intptr_t v = lithic_selRec(r);"
+              , "  return v == (intptr_t)42 ? 0 : 1;"
+              , "}"
+              ]
+         in assertCompilesLinksAndRunsWithGcc "record-select-run" out harness
+
+    , testCase "generated C variant-case path links and runs with gcc" $
+        let out = cgenProgram
+              [ (defVariantDecl, Nothing)
+              , (defVariantCaseDecl, Nothing)
+              ]
+            harness = T.unlines
+              [ "#include <stdint.h>"
+              , "extern intptr_t lithic_mkOk(intptr_t x);"
+              , "extern intptr_t lithic_caseVariantFn(intptr_t v);"
+              , "int main(void) {"
+              , "  intptr_t v = lithic_mkOk((intptr_t)42);"
+              , "  intptr_t r = lithic_caseVariantFn(v);"
+              , "  return r == (intptr_t)42 ? 0 : 1;"
+              , "}"
+              ]
+         in assertCompilesLinksAndRunsWithGcc "variant-case-run" out harness
+
+    , testCase "generated C unmatched variant-case falls back to default return 0" $
+        let out = cgenProgram
+              [ (defVariantDecl, Nothing)
+              , (defVariantNoMatchDecl, Nothing)
+              ]
+            harness = T.unlines
+              [ "#include <stdint.h>"
+              , "extern intptr_t lithic_mkOk(intptr_t x);"
+              , "extern intptr_t lithic_caseVariantNoMatchFn(intptr_t v);"
+              , "int main(void) {"
+              , "  intptr_t v = lithic_mkOk((intptr_t)42);"
+              , "  intptr_t r = lithic_caseVariantNoMatchFn(v);"
+              , "  return r == (intptr_t)0 ? 0 : 1;"
+              , "}"
+              ]
+         in assertCompilesLinksAndRunsWithGcc "variant-case-no-match-run" out harness
+
+    , testCase "generated C variant-case on wrong-kind input returns fallback 0" $
+        let out = cgenProgram
+              [ (defRecordWithFieldDecl, Nothing)
+              , (defVariantCaseDecl, Nothing)
+              ]
+            harness = T.unlines
+              [ "#include <stdint.h>"
+              , "extern intptr_t lithic_mkRecWithX(void);"
+              , "extern intptr_t lithic_caseVariantFn(intptr_t v);"
+              , "int main(void) {"
+              , "  intptr_t notVariant = lithic_mkRecWithX();"
+              , "  intptr_t r = lithic_caseVariantFn(notVariant);"
+              , "  return r == (intptr_t)0 ? 0 : 1;"
+              , "}"
+              ]
+         in assertCompilesLinksAndRunsWithGcc "variant-case-wrong-kind-run" out harness
+
+    , testCase "generated C record select on wrong-kind input returns fallback 0" $
+        let out = cgenProgram
+              [ (defVariantDecl, Nothing)
+              , (defSelectDecl, Nothing)
+              ]
+            harness = T.unlines
+              [ "#include <stdint.h>"
+              , "extern intptr_t lithic_mkOk(intptr_t x);"
+              , "extern intptr_t lithic_selRec(intptr_t r);"
+              , "int main(void) {"
+              , "  intptr_t notRecord = lithic_mkOk((intptr_t)42);"
+              , "  intptr_t r = lithic_selRec(notRecord);"
+              , "  return r == (intptr_t)0 ? 0 : 1;"
+              , "}"
+              ]
+         in assertCompilesLinksAndRunsWithGcc "record-select-wrong-kind-run" out harness
+
+    , testCase "generated C record select on null handle returns fallback 0" $
+        let out = cgenProgram
+              [ (defSelectDecl, Nothing)
+              ]
+            harness = T.unlines
+              [ "#include <stdint.h>"
+              , "extern intptr_t lithic_selRec(intptr_t r);"
+              , "int main(void) {"
+              , "  intptr_t r = lithic_selRec((intptr_t)0);"
+              , "  return r == (intptr_t)0 ? 0 : 1;"
+              , "}"
+              ]
+         in assertCompilesLinksAndRunsWithGcc "record-select-null-run" out harness
+
+    , testCase "generated C variant-case on malformed non-zero handle returns fallback 0" $
+        let out = cgenProgram
+              [ (defVariantCaseDecl, Nothing)
+              ]
+            harness = T.unlines
+              [ "#include <stdint.h>"
+              , "extern intptr_t lithic_caseVariantFn(intptr_t v);"
+              , "int main(void) {"
+              , "  intptr_t r = lithic_caseVariantFn((intptr_t)7);"
+              , "  return r == (intptr_t)0 ? 0 : 1;"
+              , "}"
+              ]
+         in assertCompilesLinksAndRunsWithGcc "variant-case-malformed-handle-run" out harness
     ]
   where
     -- ── Shared synthetic declarations ──────────────────────────────────────
@@ -297,12 +446,29 @@ cgenUnitTests =
             , (CPLit sp0 (LInt 2), CLit sp0 (LInt 20))
             , (CPWildcard sp0, CLit sp0 (LInt 99))
             ]))
+    defVariantCaseDecl =
+      CDeclDef sp0 "caseVariantFn"
+        (CLam sp0 (CPVar sp0 "v")
+          (CCase sp0 (CVar sp0 "v")
+            [ (CPVariant sp0 "Ok" (CPVar sp0 "x"), CVar sp0 "x")
+            , (CPWildcard sp0, CLit sp0 (LInt 0))
+            ]))
+    defVariantNoMatchDecl =
+      CDeclDef sp0 "caseVariantNoMatchFn"
+        (CLam sp0 (CPVar sp0 "v")
+          (CCase sp0 (CVar sp0 "v")
+            [ (CPVariant sp0 "Err" (CPVar sp0 "x"), CVar sp0 "x")
+            ]))
     defVariantDecl =
       CDeclDef sp0 "mkOk"
         (CLam sp0 (CPVar sp0 "x") (CVariant sp0 "Ok" (CVar sp0 "x")))
     defRecordDecl =
       CDeclDef sp0 "mkRec"
         (CLam sp0 (CPVar sp0 "x") (CRecord sp0 []))
+    defRecordWithFieldDecl =
+      CDeclDef sp0 "mkRecWithX"
+        (CLam sp0 (CPWildcard sp0)
+          (CRecord sp0 [("x", CLit sp0 (LInt 42))]))
     defSelectDecl =
       CDeclDef sp0 "selRec"
         (CLam sp0 (CPVar sp0 "r") (CSelect sp0 (CVar sp0 "r") "x"))
@@ -355,6 +521,60 @@ assertCompilesWithGcc tag cSrc =
               , "stderr:"
               , stdErr
               ])
+
+-- | Compile generated C, link with a tiny harness, and execute the binary.
+-- This provides a narrow C4.4 runtime sanity gate beyond object-only checks.
+assertCompilesLinksAndRunsWithGcc :: String -> T.Text -> T.Text -> IO ()
+assertCompilesLinksAndRunsWithGcc tag cSrc harnessSrc =
+  withTempArtifact tag ".c" \cPath ->
+    withTempArtifact (tag <> "-harness") ".c" \harnessPath ->
+      withTempArtifact tag ".out" \exePath -> do
+        TIO.writeFile cPath cSrc
+        TIO.writeFile harnessPath harnessSrc
+        -- Remove the pre-created temp executable path before linking.
+        -- This avoids occasional ETXTBSY races on some filesystems/toolchains
+        -- when gcc rewrites an existing just-created output file.
+        exeExists <- doesFileExist exePath
+        if exeExists then removeFile exePath else pure ()
+        (compileEc, compileOut, compileErr) <- readProcessWithExitCode
+          "gcc"
+          [ "-std=c11"
+          , "-Wall"
+          , "-Wextra"
+          , "-Werror"
+          , cPath
+          , harnessPath
+          , "-o"
+          , exePath
+          ]
+          ""
+        case compileEc of
+          ExitSuccess -> pure ()
+          ExitFailure _ ->
+            assertFailure
+              (unlines
+                [ "Expected generated C + harness to compile/link with gcc, but it failed."
+                , "Generated source: " <> cPath
+                , "Harness source: " <> harnessPath
+                , "stdout:"
+                , compileOut
+                , "stderr:"
+                , compileErr
+                ])
+
+        (runEc, runOut, runErr) <- readProcessWithExitCode exePath [] ""
+        case runEc of
+          ExitSuccess -> pure ()
+          ExitFailure _ ->
+            assertFailure
+              (unlines
+                [ "Expected linked runtime sanity binary to exit 0, but it failed."
+                , "Executable: " <> exePath
+                , "stdout:"
+                , runOut
+                , "stderr:"
+                , runErr
+                ])
 
 -- | Create a unique temporary artifact path and remove it after use.
 withTempArtifact :: String -> String -> (FilePath -> IO a) -> IO a
