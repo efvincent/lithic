@@ -478,22 +478,24 @@ cgenPatternTag = \case
   CPVariant{}  -> "CPVariant"
   CPRecord{}   -> "CPRecord"
 
--- | Compute a deterministic integer tag for a constructor or field name.
--- Uses a polynomial rolling hash over Unicode code points so distinct names
--- reliably produce distinct @intptr_t@ values at the small-program scale of Phase 10.
--- Collision handling is deferred to the nominal-type layout work in Phase 14.
-nameToTag :: Text -> Int
-nameToTag = T.foldl' (\acc ch -> acc * 31  + fromEnum ch) 0
+-- | Compute a deterministic constructor/field hash in unbounded integer space.
+-- Keeping this in @Integer@ avoids host-@Int@ overflow during accumulation.
+nameToTag :: Text -> Integer
+nameToTag = T.foldl' (\acc ch -> acc * 31 + toInteger (fromEnum ch)) 0
 
 -- | Normalize a computed name tag so generated keys never use @0@.
 -- The runtime record helper reserves key @0@ as an empty-slot sentinel, so
 -- emitted field tags must remain non-zero.
--- Affine mapping preserves distinctness of raw hash values (modulo Int overflow)
--- while keeping @0@ out of the emitted tag space.
+-- The unbounded hash is reduced into @[0 .. maxBound-1]@ and then shifted by
+-- @+1@ into @[1 .. maxBound]@ to guarantee positivity at helper boundaries.
+-- This bounded normalization can introduce collisions and does not preserve
+-- raw-hash distinctness.
 nameToTagNonZero :: Text -> Int
 nameToTagNonZero name =
   let raw = nameToTag name
-  in raw * 2 + 1
+      intMax = toInteger (maxBound :: Int)
+      bounded = raw `mod` intMax
+  in fromInteger (bounded + 1)
 
 -- | Emit a deterministic integer variant-constructor tag.
 -- Preserves the ctor name as an inline C comment for readability.
@@ -507,7 +509,7 @@ cgenVariantTag ctor =
 cgenFieldTag :: Text -> Text
 cgenFieldTag fieldName =
   let tag = tshow $ nameToTagNonZero fieldName
-   in [c|/* field: $fieldName */ $tag|]
+   in [c|/* field: $fieldName */ (intptr_t)$tag|]
 
 -- | Emit one record-field initialization step for @CRecord@ lowering.
 -- Maps a surface field name to its deterministic integer key, materializes the

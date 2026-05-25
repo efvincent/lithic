@@ -15,7 +15,7 @@ Design decision for this slice:
 
 Recommended execution order:
 
-1. Runtime helper representation depth (C3.2):
+1. Runtime helper representation depth (C3.3):
   - Introduce explicit first-pass structs for record and variant carriers used by helper boundaries.
   - Keep helper signatures value-returning (`intptr_t`) at call sites while confining representation details inside helper implementations.
   - Preserve current placeholder fallback markers for unsupported Core forms.
@@ -34,6 +34,8 @@ Current landing status:
 4. C4.4 now includes narrow runtime execution checks in `Test.CGen`: generated monomorphic identity, a non-identity variant-helper path, a record initialization plus selection roundtrip path, a variant-case dispatch path, and an unmatched variant-case fallback path (default return `0`) are compiled, linked with tiny harnesses, and executed under `gcc`.
 5. C3.2 first-pass prelude safety hardening is landed in `src/Compiler/CGenPrelude.c`: boxed runtime access helpers now validate handle registration before dereference and fail closed (`0`) for unknown/wrong-kind/null malformed inputs.
 6. C4.4 negative runtime-path coverage now includes wrong-kind, null-handle, and malformed non-zero handle variant-case checks in `Test.CGen`.
+7. C3.3 helper-contract depth is landed across `src/Compiler/CGenPrelude.c` and `src/Compiler/CGen.hs`: helper boundaries enforce positive tag/key assumptions and overflow-safe record-count validation (shared guard helpers), and tag/key emission is now overflow-safe by accumulating in unbounded `Integer` before normalizing into `[1 .. maxBound :: Int]`. A long-field-name (`fieldfieldfield`) runtime regression confirms the fix end-to-end.
+8. C4.4 runtime execution coverage is expanded in `Test.CGen` with a deeper positive record-helper path (duplicate-field overwrite then select latest value), a long-field-name regression harness, and an additional malformed non-zero record-select negative path.
 
 Definition of done for C3.3/C4.4-expansion:
 

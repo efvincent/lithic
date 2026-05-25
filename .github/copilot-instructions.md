@@ -18,6 +18,14 @@
 - make sure to also add/update/create haddock style comment documentation on modules, types, and functions, and also where complex logic would dictate additional comments for clarity / explanation.
 - you never make changes in `src` directory, unless I explicitly request you make an exception, and that exception would be in effect for the request that made the exception ONLY.
 
+## Hard Guard: Source Edit Lock
+
+- Direct edits in `src/` and `app/` are forbidden by default.
+- This includes all write paths: editor writes, apply-patch style edits, scripted rewrites, and generated-file writes.
+- Do not enforce this lock by changing filesystem permissions; the user must retain normal write access to apply patches.
+- Enforce the lock in workflow: before any write operation, evaluate target paths; if any target is under `src/` or `app/` and no explicit per-request exception exists, refuse and provide user-applied patch instructions instead.
+- An exception is valid only for the single request that explicitly grants it; after that request, immediately return to refusal mode for `src/` and `app/` writes.
+
 ## End of Phase checkpoint procedure
 
 - you only change documentation (in the `docs` folder, or README.md or CHANGELOG.md). You direct me to make code changes using the patch format section above as guidance.
