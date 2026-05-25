@@ -15,7 +15,7 @@ Design decision for this slice:
 
 Recommended execution order:
 
-1. Runtime helper representation depth (C3.2):
+1. Runtime helper representation depth (C3.3):
   - Introduce explicit first-pass structs for record and variant carriers used by helper boundaries.
   - Keep helper signatures value-returning (`intptr_t`) at call sites while confining representation details inside helper implementations.
   - Preserve current placeholder fallback markers for unsupported Core forms.
