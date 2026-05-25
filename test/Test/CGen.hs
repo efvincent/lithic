@@ -254,6 +254,16 @@ cgenUnitTests =
           T.isInfixOf "static inline intptr_t lithic_record_select(" out
             @? "select helper should return intptr_t for value-context calls"
 
+    , testCase "runtime prelude includes helper-contract guards for tag/key/count" $
+        let out = cgenProgram []
+         in do
+          T.isInfixOf "lithic_tag_is_valid" out
+            @? "prelude should enforce positive tag assumptions"
+          T.isInfixOf "lithic_record_key_is_valid" out
+            @? "prelude should enforce positive key assumptions"
+          T.isInfixOf "lithic_record_count_is_valid" out
+            @? "prelude should enforce overflow-safe record count assumptions"
+
     -- ── C4.4 narrow compile/link/run sanity gate ─────────────────────────
 
     , testCase "generated C for monomorphic identity links and runs with gcc" $
@@ -296,6 +306,40 @@ cgenUnitTests =
               , "}"
               ]
          in assertCompilesLinksAndRunsWithGcc "record-select-run" out harness
+
+    , testCase "generated C duplicate record field path updates and selects latest value" $
+        let out = cgenProgram
+              [ (defRecordOverwriteFieldDecl, Nothing)
+              , (defSelectDecl, Nothing)
+              ]
+            harness = T.unlines
+              [ "#include <stdint.h>"
+              , "extern intptr_t lithic_mkRecWithXOverwrite(void);"
+              , "extern intptr_t lithic_selRec(intptr_t r);"
+              , "int main(void) {"
+              , "  intptr_t r = lithic_mkRecWithXOverwrite();"
+              , "  intptr_t v = lithic_selRec(r);"
+              , "  return v == (intptr_t)42 ? 0 : 1;"
+              , "}"
+              ]
+         in assertCompilesLinksAndRunsWithGcc "record-overwrite-select-run" out harness
+
+    , testCase "generated C long field name remains selectable under positive key guard" $
+        let out = cgenProgram
+              [ (defRecordWithLongFieldDecl, Nothing)
+              , (defSelectLongFieldDecl, Nothing)
+              ]
+            harness = T.unlines
+              [ "#include <stdint.h>"
+              , "extern intptr_t lithic_mkRecWithLongField(void);"
+              , "extern intptr_t lithic_selRecLongField(intptr_t r);"
+              , "int main(void) {"
+              , "  intptr_t r = lithic_mkRecWithLongField();"
+              , "  intptr_t v = lithic_selRecLongField(r);"
+              , "  return v == (intptr_t)42 ? 0 : 1;"
+              , "}"
+              ]
+         in assertCompilesLinksAndRunsWithGcc "record-long-field-select-run" out harness
 
     , testCase "generated C variant-case path links and runs with gcc" $
         let out = cgenProgram
@@ -392,6 +436,20 @@ cgenUnitTests =
               , "}"
               ]
          in assertCompilesLinksAndRunsWithGcc "variant-case-malformed-handle-run" out harness
+
+    , testCase "generated C record select on malformed non-zero handle returns fallback 0" $
+        let out = cgenProgram
+              [ (defSelectDecl, Nothing)
+              ]
+            harness = T.unlines
+              [ "#include <stdint.h>"
+              , "extern intptr_t lithic_selRec(intptr_t r);"
+              , "int main(void) {"
+              , "  intptr_t r = lithic_selRec((intptr_t)7);"
+              , "  return r == (intptr_t)0 ? 0 : 1;"
+              , "}"
+              ]
+         in assertCompilesLinksAndRunsWithGcc "record-select-malformed-handle-run" out harness
     ]
   where
     -- ── Shared synthetic declarations ──────────────────────────────────────
@@ -469,9 +527,30 @@ cgenUnitTests =
       CDeclDef sp0 "mkRecWithX"
         (CLam sp0 (CPWildcard sp0)
           (CRecord sp0 [("x", CLit sp0 (LInt 42))]))
+    defRecordOverwriteFieldDecl =
+      CDeclDef sp0 "mkRecWithXOverwrite"
+        (CLam sp0 (CPWildcard sp0)
+          (CRecord sp0
+            [ ("x", CLit sp0 (LInt 7))
+            , ("x", CLit sp0 (LInt 42))
+            ]))
     defSelectDecl =
       CDeclDef sp0 "selRec"
         (CLam sp0 (CPVar sp0 "r") (CSelect sp0 (CVar sp0 "r") "x"))
+
+    -- | A field name whose polynomial rolling hash overflows Int into a
+    -- non-positive value under the old affine mapping (raw*2+1 on Int).
+    -- Confirms that the fixed nameToTagNonZero keeps keys strictly positive.
+    longFieldName = "fieldfieldfield"
+
+    defRecordWithLongFieldDecl =
+      CDeclDef sp0 "mkRecWithLongField"
+        (CLam sp0 (CPWildcard sp0)
+          (CRecord sp0 [(longFieldName, CLit sp0 (LInt 42))]))
+
+    defSelectLongFieldDecl =
+      CDeclDef sp0 "selRecLongField"
+        (CLam sp0 (CPVar sp0 "r") (CSelect sp0 (CVar sp0 "r") longFieldName))
 
     defUnusedParamDecl =
       CDeclDef sp0 "ignoreArg"

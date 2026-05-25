@@ -63,6 +63,32 @@ typedef struct {
 } lithic_record_t;
 
 /*
+ * Helper-contract guards for value/tag/key/count assumptions.
+ *
+ * Contract intent:
+ * - Tags and record keys emitted by CGen are strictly positive.
+ * - Record counts must remain representable and allocation-safe.
+ * - Invalid values fail closed before helper internals dereference/iterate.
+ */
+static inline bool lithic_tag_is_valid(intptr_t tag) {
+  return tag > (intptr_t)0;
+}
+
+static inline bool lithic_record_key_is_valid(intptr_t key) {
+  return key > (intptr_t)0;
+}
+
+static inline bool lithic_record_count_is_valid(intptr_t field_count) {
+  if (field_count < (intptr_t)0) {
+    return false;
+  }
+
+  size_t count = (size_t)field_count;
+  size_t max_count = (SIZE_MAX - offsetof(lithic_record_t, fields)) / sizeof(lithic_record_field_t);
+  return count <= max_count;
+}
+
+/*
  * Boxed-handle registry (Phase 10 safety hardening).
  *
  * Why this exists:
@@ -177,6 +203,10 @@ static inline const lithic_record_t *lithic_record_from_handle(intptr_t record) 
  * - Returns 0 on allocation or registry failure.
  */
 static inline intptr_t lithic_variant_make(intptr_t tag, intptr_t payload) {
+  if (!lithic_tag_is_valid(tag)) {
+    return (intptr_t)0;
+  }
+
   lithic_variant_t *v = (lithic_variant_t *)malloc(sizeof(lithic_variant_t));
   if (v == NULL) {
     return (intptr_t)0;
@@ -198,6 +228,9 @@ static inline intptr_t lithic_variant_make(intptr_t tag, intptr_t payload) {
 static inline intptr_t lithic_variant_tag(intptr_t variant) {
   const lithic_variant_t *v = lithic_variant_from_handle(variant);
   if (v == NULL) {
+    return (intptr_t)0;
+  }
+  if (!lithic_tag_is_valid(v->tag)) {
     return (intptr_t)0;
   }
   return v->tag;
@@ -234,13 +267,12 @@ static inline intptr_t lithic_record_set(intptr_t record, intptr_t field, intptr
     return (intptr_t)0;
   }
 
-  if (r->field_count < 0) {
+  if (!lithic_record_count_is_valid(r->field_count)) {
     return (intptr_t)0;
   }
 
-  /* key 0 is reserved as the empty-slot sentinel */
-  if (field == (intptr_t)0) {
-    return record;
+  if (!lithic_record_key_is_valid(field)) {
+    return (intptr_t)0;
   }
 
   size_t count = (size_t)r->field_count;
@@ -272,15 +304,11 @@ static inline intptr_t lithic_record_set(intptr_t record, intptr_t field, intptr
  *   or registry failure.
  */
 static inline intptr_t lithic_record_make(intptr_t field_count) {
-  if (field_count < 0) {
+  if (!lithic_record_count_is_valid(field_count)) {
     return (intptr_t)0;
   }
 
   size_t count = (size_t)field_count;
-  if (count > (SIZE_MAX - sizeof(lithic_record_t)) / sizeof(lithic_record_field_t)) {
-    return (intptr_t)0;
-  }
-
   size_t bytes = sizeof(lithic_record_t) + count * sizeof(lithic_record_field_t);
   lithic_record_t *r = (lithic_record_t *)malloc(bytes);
   if (r == NULL) {
@@ -312,7 +340,11 @@ static inline intptr_t lithic_record_select(intptr_t record, intptr_t field) {
     return (intptr_t)0;
   }
 
-  if (r->field_count < 0) {
+  if (!lithic_record_count_is_valid(r->field_count)) {
+    return (intptr_t)0;
+  }
+
+  if (!lithic_record_key_is_valid(field)) {
     return (intptr_t)0;
   }
 

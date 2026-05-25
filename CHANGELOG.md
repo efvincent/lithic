@@ -1,5 +1,23 @@
 # Revision history for lithic
 
+## 0.9.15.0 -- 2026-05-25 (Phase 10 C3.3 Helper-Contract Depth, first slice)
+
+* Phase 10 C3.3 helper-contract depth:
+	* Added shared helper-contract guards in `src/Compiler/CGenPrelude.c` for positive variant tags, positive record keys, and overflow-safe record-count validation.
+	* Hardened `lithic_variant_make`, `lithic_variant_tag`, `lithic_record_make`, `lithic_record_set`, and `lithic_record_select` to fail closed (`0`) when helper-boundary contract assumptions are violated.
+	* Fixed `nameToTag` in `src/Compiler/CGen.hs` to accumulate in unbounded `Integer` space instead of host `Int`, avoiding silent overflow into non-positive tag/key values for long field and constructor names.
+	* Fixed `nameToTagNonZero` to map results into `[1 .. maxBound :: Int]` deterministically, guaranteeing the positive-key contract independently of name length.
+	* Fixed `cgenFieldTag` to emit an explicit `(intptr_t)` cast matching the variant-tag style.
+	* Preserved existing helper ABI shape (`intptr_t` value handles) while keeping representation checks internal to prelude helpers.
+* Phase 10 C4.4 runtime sanity expansion:
+	* Added a deeper positive compile+link+run runtime harness case in `test/Test/CGen.hs` that exercises duplicate-record-field overwrite semantics and validates latest-value selection.
+	* Added a new malformed non-zero record-select negative runtime harness case (`(intptr_t)7`) that locks fail-closed fallback semantics (`return 0`).
+	* Added explicit prelude-marker assertions in `test/Test/CGen.hs` for helper-contract guard presence (`lithic_tag_is_valid`, `lithic_record_key_is_valid`, `lithic_record_count_is_valid`).
+	* Added a long-field-name regression runtime harness (`fieldfieldfield`) that would return `0` under the old overflowed mapping and returns `42` correctly under the fixed mapping.
+* Validation:
+	* Focused CGen suite: 41 passing.
+	* Full test suite: 171 passing.
+
 ## 0.9.14.0 -- 2026-05-24 (Phase 10 C3.2 Safety Hardening + C4.4 Negative Runtime Coverage)
 
 * Phase 10 C3.2 runtime helper safety hardening:
