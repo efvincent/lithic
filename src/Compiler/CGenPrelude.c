@@ -252,14 +252,15 @@ static inline intptr_t lithic_variant_payload(intptr_t variant) {
  * Insert or update a record key/value slot.
  *
  * Behavior:
- * - Rejects null/non-record handles and negative field_count.
- * - Key 0 is reserved as the empty-slot sentinel and is ignored.
+ * - Rejects null/non-record handles and invalid field_count.
+ * - Rejects non-positive field keys.
  * - Updates existing key if present.
  * - Otherwise fills first empty slot.
+ * - If no slot is available, fails closed.
  *
  * Returns:
  * - The original record handle on success.
- * - 0 on invalid input (null/kind mismatch/invalid field_count).
+ * - 0 on invalid input or insertion failure.
  */
 static inline intptr_t lithic_record_set(intptr_t record, intptr_t field, intptr_t value) {
   lithic_record_t *r = lithic_record_mut_from_handle(record);
@@ -292,7 +293,8 @@ static inline intptr_t lithic_record_set(intptr_t record, intptr_t field, intptr
     }
   }
 
-  return record;
+  /* No existing key and no empty slot: fail closed. */
+  return (intptr_t)0;
 }
 
 /*

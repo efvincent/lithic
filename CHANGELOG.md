@@ -1,5 +1,21 @@
 # Revision history for lithic
 
+## 0.9.16.0 -- 2026-05-25 (Phase 10 C3.4 Helper-Contract Propagation + C4.5 Prep)
+
+* Phase 10 C3.4 helper-contract propagation:
+	* Hardened `lithic_record_set` in `src/Compiler/CGenPrelude.c` to fail closed (`0`) when a record insertion cannot place/update a field (no remaining empty slot), preventing silent partial-success returns.
+	* Updated `Compiler.CGen` record lowering so generated `CRecord` paths now propagate helper failures immediately:
+		* guard `lithic_record_make` result before field initialization,
+		* guard each `lithic_record_set` step and return `0` on failure,
+		* avoid returning partially initialized record handles.
+	* Updated helper behavior documentation in `src/Compiler/CGenPrelude.c` to reflect strict key validation and fail-closed insertion semantics.
+* Phase 10 C4.5 prep and CLI emit-c integration expansion:
+	* Added fixture `test/fixtures/emitc-long-field-select.lithic` and corresponding golden `test/golden/emitc-long-field-select.golden`.
+	* Extended `Test.CLIEmitC` with a fixture-level `--emit-c` + `gcc -c` check for long-field record selection.
+	* Added `docs/phase10-c3-4-prep.md` and updated `docs/phase10-c-codegen.md` to track C3.4/C4.5 execution direction.
+* Validation:
+	* Full suite: `cabal test lithic-test` (173 passing).
+
 ## 0.9.15.0 -- 2026-05-25 (Phase 10 C3.3 Helper-Contract Depth, first slice)
 
 * Phase 10 C3.3 helper-contract depth:

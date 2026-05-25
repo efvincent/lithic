@@ -264,13 +264,18 @@ cgenFunctionBody retTy = \case
       return ($retTy)lithic_variant_make($ctorTag, $payloadTmp); |]
   
   CRecord _ fields ->
-    let lFields   = tshow . length $ fields
-        recTmp    = "lithic_record_tmp"
-        mkRecStmt = [c|intptr_t $recTmp = lithic_record_make($lFields);|]
-        initStmts = T.concat $ zipWith (cgenRecordInitStep recTmp) [0 :: Int ..] fields
-    in blk [c|
+    let lFields = tshow . length $ fields
+        recTmp = "lithic_record_tmp"
+        mkRecStmt = [c|intptr_t $recTmp = lithic_record_make($lFields); |]
+        mkRecGuard = [c|
+          if ($recTmp == (intptr_t)0) {
+            return ($retTy)0;
+          } |]
+        initStmts = T.concat $ zipWith (cgenRecordInitStep recTmp retTy) [0 :: Int ..] fields
+    in [c|
       /* record field count: $lFields */
       $mkRecStmt
+      $mkRecGuard
       $initStmts
       return ($retTy)$recTmp;
     |]
@@ -517,14 +522,17 @@ cgenFieldTag fieldName =
 -- @lithic_record_set@ to populate the runtime record carrier.
 -- The @Int@ index is used only to keep generated temporary names stable and
 -- collision-free across fields in the same record literal.
-cgenRecordInitStep :: Text -> Int -> (Text, CoreExpr) -> Text
-cgenRecordInitStep recTmp ix (fieldName, fieldExpr) =
-  let valTmp  = "lithic_record_val_tmp_" <> tshow ix
+cgenRecordInitStep :: Text -> Text -> Int -> (Text, CoreExpr) -> Text
+cgenRecordInitStep recTmp retTy ix (fieldName, fieldExpr) =
+  let valTmp = "lithic_record_val_tmp_" <> tshow ix
       keyExpr = cgenFieldTag fieldName
       valExpr = cgenExprValue fieldExpr
   in [c|
     intptr_t $valTmp = $valExpr;
     $recTmp = lithic_record_set($recTmp, $keyExpr, $valTmp);
+    if ($recTmp == (intptr_t)0) {
+      return ($retTy)0;
+    }
   |]
 
 -- ─── Utilities ────────────────────────────────────────────────────────────────

@@ -1,9 +1,11 @@
 # Phase 10 Scaffold: C Code Generation First Pass
 
-Status: C2.2 call/case/variant/select lowering merged on main (PR #28) + C4.3 fixture-level emit/compile integration landed (2026-05-23) + C3.1 compile-time prelude template embedding and C3.2 first-pass prelude safety hardening landed + expanded C4.4 compile/link/run sanity gate (2026-05-24)
+Status: C2.2 call/case/variant/select lowering merged on main (PR #28) + C4.3 fixture-level emit/compile integration landed (2026-05-23) + C3.1 compile-time prelude template embedding and C3.2 first-pass prelude safety hardening landed + expanded C4.4 compile/link/run sanity gate (2026-05-24) + C3.3 helper-contract depth landed (2026-05-25) + C3.4 record-init failure propagation and CLI long-field fixture coverage landed (2026-05-25)
 Branch: main (post-merge baseline)
 
-## Immediate Next Slice (C3.3/C4.4-expansion)
+Next prep checkpoint: `docs/phase10-c3-4-prep.md`.
+
+## Immediate Next Slice (C3.4/C4.5-expansion)
 
 Goal: deepen runtime representation beyond placeholder helpers while widening runtime execution checks incrementally.
 
@@ -15,7 +17,7 @@ Design decision for this slice:
 
 Recommended execution order:
 
-1. Runtime helper representation depth (C3.3):
+1. Runtime helper representation depth (C3.4):
   - Introduce explicit first-pass structs for record and variant carriers used by helper boundaries.
   - Keep helper signatures value-returning (`intptr_t`) at call sites while confining representation details inside helper implementations.
   - Preserve current placeholder fallback markers for unsupported Core forms.
@@ -23,7 +25,7 @@ Recommended execution order:
   - Add focused `test/fixtures` declaration inputs for identity, variant match, and record/select paths.
   - Add test coverage that runs `--emit-c` on fixtures and compiles emitted files with `gcc -std=c11 -Wall -Wextra -Werror -c`.
   - Keep output checks semantic (markers/contracts), not brittle whole-file snapshots.
-3. Runtime execution sanity gate (C4.4):
+3. Runtime execution sanity gate (C4.5):
   - For a tiny monomorphic subset, add compile+link+run checks (opt-in or narrowly scoped) to validate observed result shape beyond `-c` object checks.
 
 Current landing status:
@@ -36,8 +38,10 @@ Current landing status:
 6. C4.4 negative runtime-path coverage now includes wrong-kind, null-handle, and malformed non-zero handle variant-case checks in `Test.CGen`.
 7. C3.3 helper-contract depth is landed across `src/Compiler/CGenPrelude.c` and `src/Compiler/CGen.hs`: helper boundaries enforce positive tag/key assumptions and overflow-safe record-count validation (shared guard helpers), and tag/key emission is now overflow-safe by accumulating in unbounded `Integer` before normalizing into `[1 .. maxBound :: Int]`. A long-field-name (`fieldfieldfield`) runtime regression confirms the fix end-to-end.
 8. C4.4 runtime execution coverage is expanded in `Test.CGen` with a deeper positive record-helper path (duplicate-field overwrite then select latest value), a long-field-name regression harness, and an additional malformed non-zero record-select negative path.
+9. C3.4 propagation hardening is landed: `lithic_record_set` now fails closed when no update/insert slot is available, and generated `CRecord` lowering in `Compiler.CGen` now guards `record_make` and each `record_set` step to avoid returning partially initialized handles.
+10. CLI fixture-level coverage now includes `emitc-long-field-select` in `Test.CLIEmitC` with `--emit-c` and `gcc -c` validation.
 
-Definition of done for C3.3/C4.4-expansion:
+Definition of done for C3.4/C4.5-expansion:
 
 1. Existing CGen unit tests and CLI `--emit-c` integration tests remain green.
 2. New fixture-level emit/compile tests pass under Linux `gcc`.

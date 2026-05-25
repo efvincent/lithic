@@ -129,6 +129,26 @@ cliEmitCTests =
             assertBool "generated C should include variant helper call"
               (T.isInfixOf "lithic_variant_make(" out)
             assertCompilesWithGcc outPath
+
+      , testCase "fixture emitc-long-field-select emits helper call and compiles with gcc -c" $ do
+          cliPath <- getCliPath
+          withTempOutputPath \outPath -> do
+            let srcPath = "test/fixtures/emitc-long-field-select.lithic"
+            (ec, stdOut, stdErr) <- runEmitC cliPath ["--emit-c", srcPath, "-o", outPath]
+            case ec of
+              ExitSuccess -> pure ()
+              ExitFailure _ ->
+                assertFailure $
+                  unlines
+                    [ "Expected long-field record-select fixture emit-c to succeed"
+                    , "fixture: " <> srcPath
+                    , "stdout: " <> stdOut
+                    , "stderr: " <> stdErr
+                    ]
+            out <- TIO.readFile outPath
+            assertBool "generated C should include record-select helper call"
+              (T.isInfixOf "lithic_record_select(" out)
+            assertCompilesWithGcc outPath
       ]
 
 runEmitC :: FilePath -> [String] -> IO (ExitCode, String, String)
