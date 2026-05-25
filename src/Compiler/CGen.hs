@@ -266,8 +266,8 @@ cgenFunctionBody retTy = \case
   CRecord _ fields ->
     let lFields = tshow . length $ fields
         recTmp = "lithic_record_tmp"
-        mkRecStmt = blk [c|intptr_t $recTmp = lithic_record_make($lFields); |]
-        mkRecGuard = blk [c|
+        mkRecStmt = [c|intptr_t $recTmp = lithic_record_make($lFields); |]
+        mkRecGuard = [c|
           if ($recTmp == (intptr_t)0) {
             return ($retTy)0;
           } |]
