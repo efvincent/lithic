@@ -105,7 +105,7 @@ cgenDecl (decl, mTy) = case decl of
             in TB.fromText $
               let fName = cFunctionName name
                   paramUses = cgenMarkParamsUsed params
-                  fBody = cgenFunctionBody retTy body
+                  fBody = cgenFunctionBodyScoped params retTy body
               in blks [c|
               /* definition: $name */
               $retTy $fName($paramList) {
@@ -180,11 +180,11 @@ isMonomorphic = \case
 
 -- ─── Statement-level body emission ───────────────────────────────────────────
 
--- | Emit a C statement sequence for a function body.
--- @retTy@ is the declared return type of the enclosing function and is used to
--- produce valid placeholder @return@ values for forms not yet fully lowered.
-cgenFunctionBody :: Text -> CoreExpr -> Text
-cgenFunctionBody retTy = \case
+-- | Emit a C statement sequence while tracking locally bound callable names.
+-- Names in @inScope@ are emitted as-is, while non-local call targets are
+-- mapped through the top-level C symbol mangling convention.
+cgenFunctionBodyScoped :: [Text] -> Text -> CoreExpr -> Text
+cgenFunctionBodyScoped inScope retTy = \case
   -- Targets 2 & 3: actual interal and vairable emission.
   CLit _ lit ->
     let r = cgenLiteralValue lit 
@@ -198,7 +198,7 @@ cgenFunctionBody retTy = \case
   -- to a scaffold comment and continue with thge body.
   CLet _ (CPVar _ varName) rhs body ->
     let expr = cgenExprValueAs "intptr_t" rhs
-        fBody = cgenFunctionBody retTy body
+        fBody = cgenFunctionBodyScoped (varName : inScope) retTy body
     in blk [c|
       intptr_t $varName = $expr;
       $fBody |]
@@ -206,7 +206,7 @@ cgenFunctionBody retTy = \case
   CLet _ pat rhs body ->
     let pTag = cgenPatternTag pat 
         expr = cgenExprTag rhs
-        fBody = cgenFunctionBody retTy body
+        fBody = cgenFunctionBodyScoped inScope retTy body
     in blk [c|
       /* let binding: $pTag */
       /* let rhs: $expr */
@@ -219,8 +219,9 @@ cgenFunctionBody retTy = \case
     -- Any other call target shape falls back with an explicit diagnostic marker.
     case fn of
       CVar _ fnName ->
-        let argExpr = cgenExprValue arg
-        in blk [c| return ($retTy)$fnName($argExpr); |]
+        let calleeName = cgenCallName inScope fnName
+            argExpr = cgenExprValue arg
+        in blk [c| return ($retTy)$calleeName($argExpr); |]
       unsupportedFn ->
         let cFnTag = cgenExprTag unsupportedFn
             cArg   = cgenExprTag arg
@@ -238,7 +239,7 @@ cgenFunctionBody retTy = \case
             scrutDecl   = [c|intptr_t $scrutTmp = $scrutExpr; |]
             tagDecl     = [c|intptr_t $tagTmp = lithic_variant_tag($scrutTmp); |]
             branchTexts = 
-              T.concat $ zipWith (cgenVariantCaseBranch retTy scrutTmp tagTmp) [0::Int ..] branches
+              T.concat $ zipWith (cgenVariantCaseBranch inScope retTy scrutTmp tagTmp) [0::Int ..] branches
         in blk [c|
         $scrutDecl
         $tagDecl
@@ -251,7 +252,7 @@ cgenFunctionBody retTy = \case
             scrutVal    = cgenExprValueAs scrutTy scrut
             scrutDecl   = [c|$scrutTy $scrutTmp = $scrutVal; |]
             branchTexts =
-              T.concat $ zipWith (cgenLiteralCaseBranch retTy scrutTy scrutTmp) [0::Int ..] branches
+              T.concat $ zipWith (cgenLiteralCaseBranch inScope retTy scrutTy scrutTmp) [0::Int ..] branches
         in blk [c|
           $scrutDecl
           $branchTexts
@@ -370,9 +371,9 @@ cgenEscapeString = T.concatMap escapeChar
 -- | Emit one branch of a literal-scrutinee case chain.
 -- Emits @if@ for index 0, @else if@ for subsequent branches, and @else@ for
 -- a wildcard / variable catch-all. Each branch carries a source-order comment.
-cgenLiteralCaseBranch :: Text -> Text -> Text -> Int -> (CorePattern, CoreExpr) -> Text
-cgenLiteralCaseBranch retTy scrutTy scrutTmp ix (pat, body) =
-  let bodyText   = cgenFunctionBody retTy body
+cgenLiteralCaseBranch :: [Text] -> Text -> Text -> Text -> Int -> (CorePattern, CoreExpr) -> Text
+cgenLiteralCaseBranch inScope retTy scrutTy scrutTmp ix (pat, body) =
+  let bodyText   = cgenFunctionBodyScoped inScope retTy body
       branchTag  = "/* case branch " <> tshow ix <> " */"
       guardKw    = if ix == 0 then "if"     else "else if"
       catchAllKw = if ix == 0 then "if (1)" else "else"
@@ -413,7 +414,7 @@ cgenLiteralCaseBranch retTy scrutTy scrutTmp ix (pat, body) =
       let litStr = esc s
       in [c|
         $branchTag
-        $guardKw (strcmp($scrutTmp, $litStr) == 0) {
+        $guardKw (($scrutTmp != NULL) && strcmp($scrutTmp, $litStr) == 0) {
           $bodyText
         }
       |]
@@ -427,11 +428,12 @@ cgenLiteralCaseBranch retTy scrutTy scrutTmp ix (pat, body) =
       |]
 
     CPVar _ varName ->
-      [c|
+      let boundBody = cgenFunctionBodyScoped (varName : inScope) retTy body
+      in [c|
         $branchTag
         $catchAllKw {
           intptr_t $varName = (intptr_t)$scrutTmp;
-          $bodyText
+          $boundBody
         }
       |]
 
@@ -455,20 +457,22 @@ cgenLiteralCaseBranch retTy scrutTy scrutTmp ix (pat, body) =
 -- Variant headed branches compare the precomputed variant tag and optionally
 -- bind payloads for @CPVar@ payload binders. Wildcard/variable branches lower
 -- as catch-all fallbacks preserving source order.
-cgenVariantCaseBranch :: Text -> Text -> Text -> Int -> (CorePattern, CoreExpr) -> Text
-cgenVariantCaseBranch retTy scrutTmp tagTmp ix (pat, body) =
-  let bodyText = cgenFunctionBody retTy body
+cgenVariantCaseBranch :: [Text] -> Text -> Text -> Text -> Int -> (CorePattern, CoreExpr) -> Text
+cgenVariantCaseBranch inScope retTy scrutTmp tagTmp ix (pat, body) =
+  let bodyText = cgenFunctionBodyScoped inScope retTy body
       branchTag = "/* case branch " <> tshow ix <> " */"
       guardKw = if ix == 0 then "if" else "else if"
   in case pat of
     CPVariant _ ctor innerPat ->
       let ctorCmp = cgenVariantTag ctor
       in case innerPat of
-        CPVar _ payloadName -> blk [c|
+        CPVar _ payloadName -> 
+          let boundBody = cgenFunctionBodyScoped (payloadName : inScope) retTy body
+          in blk [c|
           $branchTag
           $guardKw ($tagTmp == $ctorCmp) {
             intptr_t $payloadName = lithic_variant_payload($scrutTmp);
-            $bodyText
+            $boundBody
           } |]
         CPWildcard _ -> blk [c|
           $branchTag
@@ -632,6 +636,14 @@ cgenRecordInitStep recTmp retTy ix (fieldName, fieldExpr) =
   |]
 
 -- ─── Utilities ────────────────────────────────────────────────────────────────
+
+-- | Resolve a callable C name from a surface/Core variable name.
+-- Names already bound in local scope are emitted unchanged; all other names are
+-- treated as top-level declarations and mapped via cFunctionName.
+cgenCallName :: [Text] -> Text -> Text
+cgenCallName inScope fnName 
+  | fnName `elem` inScope = fnName
+  | otherwise             = cFunctionName fnName
 
 -- | Convert a Lithic declaration name into a C-safe identifier.
 cFunctionName :: Text -> Text
