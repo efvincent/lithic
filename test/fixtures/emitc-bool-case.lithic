@@ -1,0 +1,3 @@
+checkBool b = case b of
+  True => 1
+  False => 0

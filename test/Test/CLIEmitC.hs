@@ -149,6 +149,26 @@ cliEmitCTests =
             assertBool "generated C should include record-select helper call"
               (T.isInfixOf "lithic_record_select(" out)
             assertCompilesWithGcc outPath
+
+      , testCase "fixture emitc-bool-case emits concrete guards and compiles with gcc -c" $ do
+          cliPath <- getCliPath
+          withTempOutputPath \outPath -> do
+            let srcPath = "test/fixtures/emitc-bool-case.lithic"
+            (ec, stdOut, stdErr) <- runEmitC cliPath ["--emit-c", srcPath, "-o", outPath]
+            case ec of
+              ExitSuccess -> pure ()
+              ExitFailure _ ->
+                assertFailure $
+                  unlines
+                    [ "Expected bool-case fixture emit-c to succeed"
+                    , "fixture: " <> srcPath
+                    , "stdout: " <> stdOut
+                    , "stderr: " <> stdErr
+                    ]
+            out <- TIO.readFile outPath
+            assertBool "generated C should include bool case guards"
+              (T.isInfixOf "lithic_case_scrut" out)
+            assertCompilesWithGcc outPath
       ]
 
 runEmitC :: FilePath -> [String] -> IO (ExitCode, String, String)

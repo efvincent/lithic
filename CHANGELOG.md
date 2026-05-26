@@ -1,5 +1,26 @@
 # Revision history for lithic
 
+## 0.9.17.0 -- 2026-05-26 (Phase 10 C3.5 Case/Expr-Value Lowering + CLI Bool-Case Coverage)
+
+* Phase 10 C3.5 lowering depth:
+	* Extended case lowering in `src/Compiler/CGen.hs` to route literal-like branch sets through a materialized scrutinee path even when the scrutinee is not a literal.
+	* Added Bool literal pattern lowering in `cgenLiteralCaseBranch`:
+		* `True` lowers to non-zero guard checks.
+		* `False` lowers to zero guard checks.
+	* Added string-literal case-branch lowering via `strcmp`-based comparison.
+	* Extended expression-value lowering in `src/Compiler/CGen.hs`:
+		* direct named calls in value position now lower inline via generated C symbol emission,
+		* record selection in value position now lowers inline via `lithic_record_select`.
+	* Adjusted top-level constant lowering so non-static helper-backed declarations emit zero-arg functions instead of invalid file-scope runtime-call initializers.
+* Test coverage:
+	* Added CGen unit tests in `test/Test/CGen.hs` for bool variable case lowering, let-local call value lowering, let-local select value lowering, and compile-link-run bool-case sanity.
+	* Added CLI emit-c integration coverage in `test/Test/CLIEmitC.hs` plus fixture/golden files for `emitc-bool-case`.
+	* Updated the non-lambda declaration expectation in `test/Test/CGen.hs` to match the new helper-backed top-level constant lowering contract.
+* Validation:
+	* Focused CGen suite: `cabal test lithic-test --test-options='-p "CGen Unit Tests"'` (45 passing)
+	* Focused CLI emit-c integration: `cabal test lithic-test --test-options='-p "CLI --emit-c Integration"'` (8 passing)
+	* Full suite: `cabal test lithic-test` (179 passing)
+
 ## 0.9.16.0 -- 2026-05-25 (Phase 10 C3.4 Helper-Contract Propagation + C4.5 Prep)
 
 * Phase 10 C3.4 helper-contract propagation:

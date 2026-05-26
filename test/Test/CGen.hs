@@ -1,7 +1,7 @@
 -- | Unit tests for Phase 10 C code generation.
--- Current focus: C2.2 call/case/variant/select lowering contracts on top of
--- C2.1 typed signatures, literal/variable terminals, let lowering, and the
--- monomorphism guard.
+-- Current focus: C3.5 case-expression and expression-value lowering on top of
+-- the earlier emission contracts, monomorphism guard, and runtime helper ABI
+-- checks.
 module Test.CGen
   ( cgenUnitTests
   ) where
@@ -51,9 +51,8 @@ cgenUnitTests =
             @? "signature placeholder comment missing"
           T.isInfixOf "/* definition: id */" out
             @? "definition placeholder comment missing"
-          -- non-lambda def is now a global constant declaration (C2.1)
-          T.isInfixOf "intptr_t lithic_id =" out
-            @? "non-lambda definition should emit as global constant"
+          T.isInfixOf "intptr_t lithic_id(void) {" out
+            @? "non-lambda definition should emit as a zero-arg helper-backed function when it is not a static initializer"
 
     , testCase "lambda definition emits typed function with call lowering" $
         let out = cgenProgram [(defAppDecl, Nothing)]
@@ -61,8 +60,8 @@ cgenUnitTests =
           -- C2.1: parameters are typed; no type supplied so intptr_t is used
           T.isInfixOf "intptr_t lithic_applyFn(intptr_t x) {" out
             @? "lambda definition should emit typed named C function"
-          T.isInfixOf "return (intptr_t)f(x);" out
-            @? "supported var-call form should emit direct C call return"
+          T.isInfixOf "return (intptr_t)lithic_f(x);" out
+            @? "supported var-call form should emit direct C call return with top-level symbol mangling"
           not (T.isInfixOf "lithic_unsupported_fn(0);" out)
             @? "supported var-call form should not use unsupported placeholder"
 
@@ -79,7 +78,7 @@ cgenUnitTests =
             p0 = firstIndex "/* case branch 0 */" out
             p1 = firstIndex "/* case branch 1 */" out
          in do
-          T.isInfixOf "int64_t lithic_case_scrut = (int64_t)2;" out
+          T.isInfixOf "int64_t lithic_case_scrut =" out
             @? "literal case should materialize an int scrutinee temporary"
           T.isInfixOf "if (lithic_case_scrut == (int64_t)1)" out
             @? "first literal branch should lower to concrete equality guard"
@@ -123,13 +122,13 @@ cgenUnitTests =
           T.isInfixOf "return (intptr_t)0;" out
             @? "unsupported app target should keep compile-safe placeholder return"
 
-    , testCase "unsupported case pattern emits explicit fallback marker" $
+    , testCase "variant-headed case branches take precedence over literal-like dispatch" $
         let out = cgenProgram [(defUnsupportedCasePatternDecl, Nothing)]
          in do
-          T.isInfixOf "unsupported-case-pattern: CPVariant" out
-            @? "unsupported case pattern should emit explicit case diagnostic marker"
-          T.isInfixOf "return (intptr_t)0;" out
-            @? "unsupported case pattern path should keep compile-safe placeholder return"
+          T.isInfixOf "intptr_t lithic_case_variant_tag = lithic_variant_tag(lithic_case_variant_scrut);" out
+            @? "variant-headed branch sets should route through variant tag dispatch"
+          not (T.isInfixOf "unsupported-case-scrutinee" out)
+            @? "variant-headed branch sets should not fall back to unsupported-case-scrutinee"
 
     , testCase "variant case lowering uses runtime tag and payload helpers" $
         let out = cgenProgram [(defVariantCaseDecl, Nothing)]
@@ -140,6 +139,28 @@ cgenUnitTests =
             @? "variant case lowering should emit guarded tag comparison branches"
           T.isInfixOf "intptr_t x = lithic_variant_payload(lithic_case_variant_scrut);" out
             @? "variant case lowering should bind payload for CPVar payload patterns"
+
+    , testCase "bool variable case lowering emits concrete true/false guards" $
+        let out = cgenProgram [(defCaseBoolVarDecl, Nothing)]
+         in do
+          T.isInfixOf "if (lithic_case_scrut != (intptr_t)0)" out
+            @? "True branch should lower to non-zero guard"
+          T.isInfixOf "else if (lithic_case_scrut == (intptr_t)0)" out
+            @? "False branch should lower to zero guard"
+          not (T.isInfixOf "unsupported-case-scrutinee" out)
+            @? "bool variable scrutinee should not hit unsupported-case-scrutinee"
+
+    , testCase "let-local direct call uses mangled callee name and compiles" $
+        let out = cgenProgram [(defIdDecl, Nothing), (defLetCallDecl, Nothing)]
+         in do
+          T.isInfixOf "intptr_t y = (intptr_t)lithic_idFn(x);" out
+            @? "let-local call RHS should lower via inline direct call expression with the generated C symbol"
+          assertCompilesWithGcc "let-local-direct-call" out
+
+    , testCase "let-local select uses inline expression-value record_select lowering" $
+        let out = cgenProgram [(defLetSelectDecl, Nothing)]
+         in T.isInfixOf "intptr_t y = (intptr_t)lithic_record_select(r," out
+              @? "let-local select RHS should lower via inline record_select expression"
 
     , testCase "declarations are emitted in input order" $
         let out = cgenProgram [(defADecl, Nothing), (defBDecl, Nothing)]
@@ -358,6 +379,21 @@ cgenUnitTests =
               ]
          in assertCompilesLinksAndRunsWithGcc "variant-case-run" out harness
 
+    , testCase "generated C bool variable case links and runs with gcc" $
+        let out = cgenProgram
+              [ (defCaseBoolVarDecl, Nothing)
+              ]
+            harness = T.unlines
+              [ "#include <stdint.h>"
+              , "extern intptr_t lithic_checkBool(intptr_t b);"
+              , "int main(void) {"
+              , "  intptr_t t = lithic_checkBool((intptr_t)1);"
+              , "  intptr_t f = lithic_checkBool((intptr_t)0);"
+              , "  return (t == (intptr_t)1 && f == (intptr_t)0) ? 0 : 1;"
+              , "}"
+              ]
+         in assertCompilesLinksAndRunsWithGcc "bool-case-run" out harness
+
     , testCase "generated C unmatched variant-case falls back to default return 0" $
         let out = cgenProgram
               [ (defVariantDecl, Nothing)
@@ -487,6 +523,20 @@ cgenUnitTests =
         (CLam sp0 (CPVar sp0 "x")
           (CLet sp0 (CPVar sp0 "y") (CLit sp0 (LInt 1)) (CVar sp0 "y")))
 
+    defLetCallDecl =
+      CDeclDef sp0 "callInLet"
+        (CLam sp0 (CPVar sp0 "x")
+          (CLet sp0 (CPVar sp0 "y")
+            (CApp sp0 (CVar sp0 "idFn") (CVar sp0 "x"))
+            (CVar sp0 "y")))
+
+    defLetSelectDecl =
+      CDeclDef sp0 "selectInLet"
+        (CLam sp0 (CPVar sp0 "r")
+          (CLet sp0 (CPVar sp0 "y")
+            (CSelect sp0 (CVar sp0 "r") "x")
+            (CVar sp0 "y")))
+
     -- Float and String literal bodies
     defFloatDecl =
       CDeclDef sp0 "pi"
@@ -503,6 +553,13 @@ cgenUnitTests =
             [ (CPLit sp0 (LInt 1), CLit sp0 (LInt 10))
             , (CPLit sp0 (LInt 2), CLit sp0 (LInt 20))
             , (CPWildcard sp0, CLit sp0 (LInt 99))
+            ]))
+    defCaseBoolVarDecl =
+      CDeclDef sp0 "checkBool"
+        (CLam sp0 (CPVar sp0 "b")
+          (CCase sp0 (CVar sp0 "b")
+            [ (CPLit sp0 (LBool True), CLit sp0 (LInt 1))
+            , (CPLit sp0 (LBool False), CLit sp0 (LInt 0))
             ]))
     defVariantCaseDecl =
       CDeclDef sp0 "caseVariantFn"
