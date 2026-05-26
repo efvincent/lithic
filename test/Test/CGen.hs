@@ -60,8 +60,8 @@ cgenUnitTests =
           -- C2.1: parameters are typed; no type supplied so intptr_t is used
           T.isInfixOf "intptr_t lithic_applyFn(intptr_t x) {" out
             @? "lambda definition should emit typed named C function"
-          T.isInfixOf "return (intptr_t)f(x);" out
-            @? "supported var-call form should emit direct C call return"
+          T.isInfixOf "return (intptr_t)lithic_f(x);" out
+            @? "supported var-call form should emit direct C call return with top-level symbol mangling"
           not (T.isInfixOf "lithic_unsupported_fn(0);" out)
             @? "supported var-call form should not use unsupported placeholder"
 

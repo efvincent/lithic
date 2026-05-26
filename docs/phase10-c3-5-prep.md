@@ -146,7 +146,7 @@ Validation results at landing:
    `unsupported-rhs:CApp` placeholder for direct named calls).
 3. `CSelect _ r fld` in expression value position emits
    `lithic_record_select(r, key)` inline.
-4. All existing 173 tests remain green.
+4. All current tests remain green.
 5. New CGen unit tests and CLI fixture tests added and green.
 6. Phase 10 docs/changelog updated in the same change.
 
@@ -161,5 +161,3 @@ Validation results at landing:
   (full prelude + declarations) can be reviewed without scrolling off screen.
   Also: `cgenDeclsOnly` variant (without prelude) for REPL output to reduce
   noise further.
-- **String case lowering**: `CPLit (LString s)` via `strcmp` — blocked on
-  confirming `<string.h>` is available in the prelude.

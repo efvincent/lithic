@@ -3,14 +3,26 @@
 Status: C2.2 call/case/variant/select lowering merged on main (PR #28) + C4.3 fixture-level emit/compile integration landed (2026-05-23) + C3.1 compile-time prelude template embedding and C3.2 first-pass prelude safety hardening landed + expanded C4.4 compile/link/run sanity gate (2026-05-24) + C3.3 helper-contract depth landed (2026-05-25) + C3.4 record-init failure propagation and CLI long-field fixture coverage landed (2026-05-25) + C3.5 case-expression and expression-value lowering depth landed (2026-05-26)
 Branch: main (post-merge baseline)
 
-Next prep checkpoint: `docs/phase10-c3-5-prep.md`.
+Next prep checkpoint: `docs/phase10-c3-6-prep.md`.
 
-## Immediate Next Slice (C3.5 — case-expression and expression-value lowering)
+## Immediate Next Slice (C3.6 — Arithmetic Core/CGen Lowering)
 
-Goal: widen the case-expression lowering and inline expression-value path so that
-common programs involving variable-scrutinee dispatch (Bool, Int), direct calls in
-let-local position, and field selection in expression position lower to correct C
-rather than producing placeholder stubs.
+Goal: introduce arithmetic operators in Core and CGen so direct numeric
+programs can lower without relying on placeholder/unsupported paths.
+
+Design direction for this slice:
+
+1. Add `CAdd`, `CSub`, `CMul`, and `CDiv` to the Core expression surface.
+2. Lower arithmetic forms to direct C operators (`+`, `-`, `*`, `/`) in both
+  statement-level and expression-value emission paths.
+3. Keep integer/float coercion boundaries explicit and preserve current
+  compile-safe fallback behavior for unsupported forms.
+
+Recommended execution order (C3.6a -> C3.6b -> C3.6c):
+
+1. C3.6a -> Core/Elaborator constructor plumb-through for arithmetic forms
+2. C3.6b -> CGen statement-level arithmetic lowering
+3. C3.6c -> CGen expression-value arithmetic lowering + focused tests
 
 Design decisions for this slice:
 
@@ -48,7 +60,7 @@ Definition of done for C3.5/C4.x-expansion:
 1. `case boolVar of True => ...; False => ...` emits correct, compilable C (no `unsupported-case-scrutinee` stub).
 2. `CApp (CVar f) arg` in let-local value position emits `f(arg)` inline (no `unsupported-rhs:CApp` stub).
 3. `CSelect` in expression value position emits `lithic_record_select(...)` inline.
-4. All existing 173 tests remain green.
+4. All current tests remain green.
 5. New CGen unit tests and CLI Bool-case fixture test added and green.
 6. Phase 10 docs and changelog updated in the same change.
 
