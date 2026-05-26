@@ -115,11 +115,25 @@ cgenDecl (decl, mTy) = case decl of
             let valTy = maybe "intptr_t" cgenCType mTy
                 fName = cFunctionName name
                 fBody = cgenExprValueAs valTy body
-             in TB.fromText $ blks [c|
-             /* definition: $name */
-             $valTy $fName = $fBody; |]
+             in TB.fromText $ 
+              if isStaticCInitializer body
+              then blks [c|
+              /* definition: $name */
+              $valTy $fName = $fBody; |]
+              else blks [c|
+              /* definition: $name */
+              $valTy $fName(void) {
+                return $fBody;
+              } |]
 
 -- ─── Type mapping ────────────────────────────────────────────────────────────
+
+-- | True only for Core expressions that are safe to emit as file-scope C
+-- initializers without introducing helper calls or runtime evaluation.
+isStaticCInitializer :: CoreExpr -> Bool
+isStaticCInitializer = \case
+  CLit{} -> True
+  _      -> False
 
 -- | Map a monomorphic Lithic type to its C type string.
 -- Compound and unrecognised types fall back to @intptr_t@.
@@ -216,42 +230,40 @@ cgenFunctionBody retTy = \case
         return ($retTy)0;   /* placeholder */ |]
   
   CCase _ scrut branches ->
-    -- C3.2: extend case lowering with first-pass variant dispatch support
-    -- while preserving existing literal-int lowering behavior.
-    case scrut of
-      CLit _ lit@(LInt _) ->
-        let scrutTy      = "int64_t"
-            scrutVal     = cgenLiteralValue lit
-            scrutTmp     = "lithic_case_scrut"
-            scrutDecl    = scrutTy <> " " <> scrutTmp <> " = " <> scrutVal <> ";"
-            branchTexts  = T.concat $
-                             zipWith (cgenLiteralCaseBranch retTy scrutTmp) [0 :: Int ..] branches
+    case () of
+      _ | any (isVariantCasePattern . fst) branches ->
+        let scrutTmp    = "lithic_case_variant_scrut"
+            tagTmp      = "lithic_case_variant_tag"
+            scrutExpr   = cgenExprValue scrut
+            scrutDecl   = [c|intptr_t $scrutTmp = $scrutExpr; |]
+            tagDecl     = [c|intptr_t $tagTmp = lithic_variant_tag($scrutTmp); |]
+            branchTexts = 
+              T.concat $ zipWith (cgenVariantCaseBranch retTy scrutTmp tagTmp) [0::Int ..] branches
+        in blk [c|
+        $scrutDecl
+        $tagDecl
+        $branchTexts
+        return ($retTy)0; /* default: no branch matched */ |]
+      
+      _ | all (isLiteralLikeCasePattern . fst) branches ->
+        let scrutTmp    = "lithic_case_scrut"
+            scrutTy     = literalCaseScrutType scrut branches
+            scrutVal    = cgenExprValueAs scrutTy scrut
+            scrutDecl   = [c|$scrutTy $scrutTmp = $scrutVal; |]
+            branchTexts =
+              T.concat $ zipWith (cgenLiteralCaseBranch retTy scrutTy scrutTmp) [0::Int ..] branches
         in blk [c|
           $scrutDecl
           $branchTexts
           return ($retTy)0; /* default: no branch matched */ |]
 
-      _ | any (isVariantCasePattern . fst) branches ->
-        let scrutTmp = "lithic_case_variant_scrut"
-            tagTmp = "lithic_case_variant_tag"
-            scrutExpr = cgenExprValue scrut
-            scrutDecl = [c|intptr_t $scrutTmp = $scrutExpr; |]
-            tagDecl = [c|intptr_t $tagTmp = lithic_variant_tag($scrutTmp); |]
-            branchTexts = 
-              T.concat $ zipWith (cgenVariantCaseBranch retTy scrutTmp tagTmp) [0::Int ..] branches
-        in blk [c|
-          $scrutDecl
-          $tagDecl
-          $branchTexts
-          return ($retTy)0; /* default: no branch matched */ |]
-      unsupportedScrut ->
-        let cScrut = cgenExprTag unsupportedScrut
-            lBranches = tshow $ length branches
+      _ ->
+        let cScrut = cgenExprTag scrut
+            lBranches = tshow (length branches)
         in blk [c|
           /* unsupported-case-scrutinee: $cScrut */
           /* case branches: $lBranches */
           return ($retTy)0; /* placeholder */ |]
-
 
   CVariant _ ctor payload ->
     -- C2.2: materialise the payload into an explicit temporary before
@@ -309,7 +321,21 @@ cgenExprValue :: CoreExpr -> Text
 cgenExprValue = \case
   CLit _ lit     -> cgenLiteralValue lit
   CVar _ varName -> varName
-  other          -> "/* unsupported-rhs:" <> cgenExprTag other <> " */ (intptr_t)0"
+  appExpr@(CApp _ _ _) ->
+    let (callee, args) = collectArgs appExpr
+    in case callee of
+      CVar _ fnName ->
+        let cFnName = cFunctionName fnName
+            argVals = T.intercalate ", " (map cgenExprValue args)
+        in [c|$cFnName($argVals)|] 
+      _ ->
+        "/* unsupported-rhs:" <> cgenExprTag appExpr <> " */ (intptr_t)0"
+  CSelect _ recordExpr fieldName ->
+    let recVal = cgenExprValue recordExpr
+        fldTag = cgenFieldTag fieldName
+    in [c|lithic_record_select($recVal, $fldTag)|]
+  other ->
+    "/* unsupported-rhs:" <> cgenExprTag other <> " */ (intptr_t)0" 
 
 -- | Emit a C expression coerced to a target C type.
 -- This is used where fallback typing can otherwise produce invalid C
@@ -344,20 +370,54 @@ cgenEscapeString = T.concatMap escapeChar
 -- | Emit one branch of a literal-scrutinee case chain.
 -- Emits @if@ for index 0, @else if@ for subsequent branches, and @else@ for
 -- a wildcard / variable catch-all. Each branch carries a source-order comment.
-cgenLiteralCaseBranch :: Text -> Text -> Int -> (CorePattern, CoreExpr) -> Text
-cgenLiteralCaseBranch retTy scrutTmp ix (pat, body) =
-  let bodyText  = cgenFunctionBody retTy body
-      branchTag = "/* case branch " <> tshow ix <> " */"
-      prefix    = if ix == 0 then "if" else "else if"
+cgenLiteralCaseBranch :: Text -> Text -> Text -> Int -> (CorePattern, CoreExpr) -> Text
+cgenLiteralCaseBranch retTy scrutTy scrutTmp ix (pat, body) =
+  let bodyText   = cgenFunctionBody retTy body
+      branchTag  = "/* case branch " <> tshow ix <> " */"
+      guardKw    = if ix == 0 then "if"     else "else if"
+      catchAllKw = if ix == 0 then "if (1)" else "else"
+      intCmp n
+        | scrutTy == "int64_t" = "(int64_t)" <> tshow n
+        | otherwise            = "(intptr_t)(int64_t)" <> tshow n
+      zeroCmp
+        | scrutTy == "int64_t" = "(int64_t)0"
+        | otherwise            = "(intptr_t)0"
+      esc s = "\"" <> cgenEscapeString s <> "\""
   in case pat of
     CPLit _ (LInt n) ->
-      let cmp = "(int64_t)" <> tshow n
+      let cmp = intCmp n
       in [c|
         $branchTag
-        $prefix ($scrutTmp == $cmp) {
+        $guardKw ($scrutTmp == $cmp) {
           $bodyText
         }
       |]
+    
+    CPLit _ (LBool True) ->
+      [c|
+        $branchTag
+        $guardKw ($scrutTmp != $zeroCmp) {
+          $bodyText
+        }
+      |]
+
+    CPLit _ (LBool False) ->
+      [c|
+        $branchTag
+        $guardKw ($scrutTmp == $zeroCmp) {
+          $bodyText
+        }
+      |]
+
+    CPLit _ (LString s) ->
+      let litStr = esc s
+      in [c|
+        $branchTag
+        $guardKw (strcmp($scrutTmp, $litStr) == 0) {
+          $bodyText
+        }
+      |]
+
     CPLit _ unsupportedLit ->
       let litTag = tshow unsupportedLit
       in [c|
@@ -365,27 +425,30 @@ cgenLiteralCaseBranch retTy scrutTmp ix (pat, body) =
         /* unsupported-case-literal: $litTag */
         return ($retTy)0; /* placeholder */
       |]
+
     CPVar _ varName ->
       [c|
         $branchTag
-        else {
+        $catchAllKw {
           intptr_t $varName = (intptr_t)$scrutTmp;
           $bodyText
         }
       |]
+
     CPWildcard _ ->
       [c|
         $branchTag
-        else {
+        $catchAllKw {
           $bodyText
-        }
+        }  
       |]
+
     unsupported ->
       let patTag = cgenPatternTag unsupported
       in [c|
-      $branchTag
-      /* unsupported-case-pattern: $patTag */
-      return ($retTy)0; /* placeholder */
+        $branchTag
+        /* unsupported-case-pattern: $patTag */
+        return ($retTy)0; /* placeholder */
       |]
 
 -- | Emit one branch of a variant-scrutinee case chain.
@@ -460,6 +523,39 @@ isVariantCasePattern :: CorePattern -> Bool
 isVariantCasePattern = \case
   CPVariant{} -> True
   _           -> False
+
+-- | Return @True@ when a case pattern can be lowered by the literal-like
+-- branch chain path (literals plus fallback binders).
+isLiteralLikeCasePattern :: CorePattern -> Bool
+isLiteralLikeCasePattern = \case
+  CPLit{}      -> True
+  CPVar{}      -> True
+  CPWildcard{} -> True
+  _            -> False
+
+-- | Choose the temporary C type used for non-variant literal-like case
+-- lowering. Prefer concrete string/int where we can preserve direct comparisons.
+literalCaseScrutType :: CoreExpr -> [(CorePattern, CoreExpr)] -> Text
+literalCaseScrutType scrut branches
+  | any isStringLitPat pats = "const char*"
+  | isIntLiteralScrut scrut && all isIntLikePat pats = "int64_t"
+  | otherwise = "intptr_t"
+  where
+    pats = map fst branches
+
+    isStringLitPat = \case
+      CPLit _ (LString _) -> True
+      _                   -> False
+
+    isIntLikePat = \case
+      CPLit _ (LInt _) -> True
+      CPVar{}          -> True
+      CPWildcard{}     -> True
+      _                -> False
+
+    isIntLiteralScrut = \case
+      CLit _ (LInt _) -> True
+      _               -> False
 
 -- | Return a compact constructor tag for scaffold diagnostics / comments.
 cgenExprTag :: CoreExpr -> Text
@@ -549,6 +645,13 @@ cFunctionName name = "lithic_" <> T.map normalize name
 -- under strict C flags when parameters are not consumed by placeholder bodies.
 cgenMarkParamsUsed :: [Text] -> Text
 cgenMarkParamsUsed = T.concat . map (\param -> "(void)" <> param <> ";\n")
+
+-- | Flatten a left-associated Core application spine into callee + args.
+collectArgs :: CoreExpr -> (CoreExpr, [CoreExpr])
+collectArgs = go []
+  where
+    go acc (CApp _ fn arg) = go (arg : acc) fn
+    go acc callee          = (callee, acc)
 
 -- | Compact @show@ helper.
 tshow :: forall a. Show a => a -> Text

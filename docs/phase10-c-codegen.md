@@ -1,6 +1,6 @@
 # Phase 10 Scaffold: C Code Generation First Pass
 
-Status: C2.2 call/case/variant/select lowering merged on main (PR #28) + C4.3 fixture-level emit/compile integration landed (2026-05-23) + C3.1 compile-time prelude template embedding and C3.2 first-pass prelude safety hardening landed + expanded C4.4 compile/link/run sanity gate (2026-05-24) + C3.3 helper-contract depth landed (2026-05-25) + C3.4 record-init failure propagation and CLI long-field fixture coverage landed (2026-05-25) + C3.5 case-expression and expression-value lowering depth in progress
+Status: C2.2 call/case/variant/select lowering merged on main (PR #28) + C4.3 fixture-level emit/compile integration landed (2026-05-23) + C3.1 compile-time prelude template embedding and C3.2 first-pass prelude safety hardening landed + expanded C4.4 compile/link/run sanity gate (2026-05-24) + C3.3 helper-contract depth landed (2026-05-25) + C3.4 record-init failure propagation and CLI long-field fixture coverage landed (2026-05-25) + C3.5 case-expression and expression-value lowering depth landed (2026-05-26)
 Branch: main (post-merge baseline)
 
 Next prep checkpoint: `docs/phase10-c3-5-prep.md`.
@@ -41,7 +41,7 @@ Current landing status:
 8. C4.4 runtime execution coverage is expanded in `Test.CGen` with a deeper positive record-helper path (duplicate-field overwrite then select latest value), a long-field-name regression harness, and an additional malformed non-zero record-select negative path.
 9. C3.4 propagation hardening is landed: `lithic_record_set` now fails closed when no update/insert slot is available, and generated `CRecord` lowering in `Compiler.CGen` now guards `record_make` and each `record_set` step to avoid returning partially initialized handles.
 10. CLI fixture-level coverage now includes `emitc-long-field-select` in `Test.CLIEmitC` with `--emit-c` and `gcc -c` validation.
-11. C3.5 case-expression and expression-value lowering is in progress on `feat/phase10-c3-5-case-expr-lowering`: extending scrutinee dispatch to handle `CVar` scrutinees with `CPLit (LBool/LInt)` patterns, extending `cgenExprValue` for inline `CApp` and `CSelect`, and adding Bool-case CLI fixture coverage.
+11. C3.5 is landed: non-variant literal-like case lowering now handles variable scrutinees, Bool literal guards lower to concrete non-zero/zero checks, inline expression-value lowering supports direct named calls and record selection, helper-backed top-level constants avoid invalid file-scope runtime-call initializers by lowering through zero-arg functions, and CLI emit-c integration now covers the `emitc-bool-case` fixture.
 
 Definition of done for C3.5/C4.x-expansion:
 

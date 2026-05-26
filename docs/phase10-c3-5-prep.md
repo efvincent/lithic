@@ -1,6 +1,6 @@
 # Phase 10 C3.5 Prep Checklist
 
-Status: kickoff prep from merged PR #31 baseline (main, v0.9.16.0)
+Status: landed from merged PR #31 baseline follow-up (main, v0.9.17.0)
 Branch: feat/phase10-c3-5-case-expr-lowering
 
 ## Motivation
@@ -63,7 +63,7 @@ The revised dispatch order in `cgenFunctionBody` for `CCase`:
 Extend `cgenExprValue` to handle `CApp (CVar f) arg`:
 
 ```
-CApp _ (CVar _ fnName) arg -> fnName <> "(" <> cgenExprValue arg <> ")"
+CApp _ (CVar _ fnName) arg -> cFunctionName fnName <> "(" <> cgenExprValue arg <> ")"
 ```
 
 Multi-argument curried calls `CApp (CApp ...) arg` require flattening the
@@ -116,8 +116,27 @@ For each C3.5 sub-item, add a unit test in `test/Test/CGen.hs`:
   `def f r = let y = r.x in y`, confirm `lithic_record_select(` appears in let-local.
 
 Add a CLI fixture:
-- `test/fixtures/emitc-bool-case.lithic`: `def checkBool b = case b of True => 1; False => 0`
+- `test/fixtures/emitc-bool-case.lithic`: `checkBool b = case b of True => 1; False => 0`
 - Corresponding `--emit-c` + `gcc -c` integration test in `test/Test/CLIEmitC.hs`.
+
+## Landing Notes (2026-05-26)
+
+C3.5 is now complete.
+
+Resolved follow-up items beyond the original prep checklist:
+
+1. Direct-call value lowering now emits generated C symbol names in inline call
+   position.
+2. Unsupported-expression fallback text now emits valid C (`(intptr_t)0`).
+3. Top-level constant lowering now distinguishes static initializers from
+   helper-backed expressions, lowering the latter through zero-argument C
+   functions rather than invalid file-scope runtime-call initializers.
+
+Validation results at landing:
+
+1. `cabal test lithic-test --test-options='-p "CGen Unit Tests"'` — 45 passing.
+2. `cabal test lithic-test --test-options='-p "CLI --emit-c Integration"'` — 8 passing.
+3. `cabal test lithic-test` — 179 passing.
 
 ## Exit Criteria
 
