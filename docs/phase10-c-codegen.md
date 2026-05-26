@@ -1,32 +1,33 @@
 # Phase 10 Scaffold: C Code Generation First Pass
 
-Status: C2.2 call/case/variant/select lowering merged on main (PR #28) + C4.3 fixture-level emit/compile integration landed (2026-05-23) + C3.1 compile-time prelude template embedding and C3.2 first-pass prelude safety hardening landed + expanded C4.4 compile/link/run sanity gate (2026-05-24) + C3.3 helper-contract depth landed (2026-05-25) + C3.4 record-init failure propagation and CLI long-field fixture coverage landed (2026-05-25)
+Status: C2.2 call/case/variant/select lowering merged on main (PR #28) + C4.3 fixture-level emit/compile integration landed (2026-05-23) + C3.1 compile-time prelude template embedding and C3.2 first-pass prelude safety hardening landed + expanded C4.4 compile/link/run sanity gate (2026-05-24) + C3.3 helper-contract depth landed (2026-05-25) + C3.4 record-init failure propagation and CLI long-field fixture coverage landed (2026-05-25) + C3.5 case-expression and expression-value lowering depth in progress
 Branch: main (post-merge baseline)
 
-Next prep checkpoint: `docs/phase10-c3-4-prep.md`.
+Next prep checkpoint: `docs/phase10-c3-5-prep.md`.
 
-## Immediate Next Slice (C3.4/C4.5-expansion)
+## Immediate Next Slice (C3.5 — case-expression and expression-value lowering)
 
-Goal: deepen runtime representation beyond placeholder helpers while widening runtime execution checks incrementally.
+Goal: widen the case-expression lowering and inline expression-value path so that
+common programs involving variable-scrutinee dispatch (Bool, Int), direct calls in
+let-local position, and field selection in expression position lower to correct C
+rather than producing placeholder stubs.
 
-Design decision for this slice:
+Design decisions for this slice:
 
-1. Keep static runtime C blocks in dedicated template resources embedded at compile time; avoid re-introducing large inline literals in Haskell modules.
-2. Preserve the current helper ABI shape while incrementally replacing helper internals with explicit first-pass carrier structs.
-3. Expand runtime sanity coverage with small harness checks per supported lowering shape, while keeping the suite fast.
+1. Extend the scrutinee dispatch in `cgenFunctionBody` / `CCase` to route
+  any non-variant, non-literal scrutinee through the `cgenLiteralCaseBranch`
+  machinery after materializing the scrutinee into a typed temp.
+2. Extend `cgenLiteralCaseBranch` to handle `CPLit (LBool _)` patterns via
+  `!= 0` / `== 0` comparisons, and `CPLit (LString _)` via `strcmp`.
+3. Extend `cgenExprValue` to handle `CApp (CVar f) arg` inline calls (with
+  left-spine flattening for curried calls) and `CSelect` field access.
 
-Recommended execution order:
+Recommended execution order (C3.5a → C3.5b → C3.5c):
 
-1. Runtime helper representation depth (C3.4):
-  - Introduce explicit first-pass structs for record and variant carriers used by helper boundaries.
-  - Keep helper signatures value-returning (`intptr_t`) at call sites while confining representation details inside helper implementations.
-  - Preserve current placeholder fallback markers for unsupported Core forms.
-2. Fixture-level emit/compile gate (C4.3):
-  - Add focused `test/fixtures` declaration inputs for identity, variant match, and record/select paths.
-  - Add test coverage that runs `--emit-c` on fixtures and compiles emitted files with `gcc -std=c11 -Wall -Wextra -Werror -c`.
-  - Keep output checks semantic (markers/contracts), not brittle whole-file snapshots.
-3. Runtime execution sanity gate (C4.5):
-  - For a tiny monomorphic subset, add compile+link+run checks (opt-in or narrowly scoped) to validate observed result shape beyond `-c` object checks.
+1. C3.5a — variable-scrutinee case dispatch (Bool and Int patterns over `CVar` scrutinees)
+2. C3.5b — direct call in expression value position (`CApp (CVar f) arg` → `f(arg)` inline)
+3. C3.5c — `CSelect` in expression value position (`r.field` → `lithic_record_select(r, key)` inline)
+4. C4.x — new CGen unit tests and one CLI Bool-case fixture per sub-item
 
 Current landing status:
 
@@ -40,13 +41,16 @@ Current landing status:
 8. C4.4 runtime execution coverage is expanded in `Test.CGen` with a deeper positive record-helper path (duplicate-field overwrite then select latest value), a long-field-name regression harness, and an additional malformed non-zero record-select negative path.
 9. C3.4 propagation hardening is landed: `lithic_record_set` now fails closed when no update/insert slot is available, and generated `CRecord` lowering in `Compiler.CGen` now guards `record_make` and each `record_set` step to avoid returning partially initialized handles.
 10. CLI fixture-level coverage now includes `emitc-long-field-select` in `Test.CLIEmitC` with `--emit-c` and `gcc -c` validation.
+11. C3.5 case-expression and expression-value lowering is in progress on `feat/phase10-c3-5-case-expr-lowering`: extending scrutinee dispatch to handle `CVar` scrutinees with `CPLit (LBool/LInt)` patterns, extending `cgenExprValue` for inline `CApp` and `CSelect`, and adding Bool-case CLI fixture coverage.
 
-Definition of done for C3.4/C4.5-expansion:
+Definition of done for C3.5/C4.x-expansion:
 
-1. Existing CGen unit tests and CLI `--emit-c` integration tests remain green.
-2. New fixture-level emit/compile tests pass under Linux `gcc`.
-3. Narrow compile/link/run sanity checks cover at least one non-identity supported lowering path in addition to identity.
-4. `README.md` and `docs/project-plan.md` stay aligned with the supported backend surface.
+1. `case boolVar of True => ...; False => ...` emits correct, compilable C (no `unsupported-case-scrutinee` stub).
+2. `CApp (CVar f) arg` in let-local value position emits `f(arg)` inline (no `unsupported-rhs:CApp` stub).
+3. `CSelect` in expression value position emits `lithic_record_select(...)` inline.
+4. All existing 173 tests remain green.
+5. New CGen unit tests and CLI Bool-case fixture test added and green.
+6. Phase 10 docs and changelog updated in the same change.
 
 ## Scope
 
