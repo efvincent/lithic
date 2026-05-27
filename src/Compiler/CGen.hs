@@ -17,7 +17,7 @@ import Data.Char (isAlphaNum)
 import Language.Haskell.TH.Syntax (addDependentFile, makeRelativeToProject, runIO)
 import Compiler.QQ (c, blk, blks)
 import Compiler.AST (Literal(..), Type(..))
-import Compiler.AST.Core (CoreDecl(..), CoreExpr(..), CorePattern(..))
+import Compiler.AST.Core (ArithOp (..), CoreDecl(..), CoreExpr(..), CorePattern(..))
 
 type Decl = (CoreDecl, Maybe Type)
 type Decls = [Decl]
@@ -115,7 +115,7 @@ cgenDecl (decl, mTy) = case decl of
             let valTy = maybe "intptr_t" cgenCType mTy
                 fName = cFunctionName name
                 fBody = cgenExprValueAs valTy body
-             in TB.fromText $ 
+             in TB.fromText $
               if isStaticCInitializer body
               then blks [c|
               /* definition: $name */
@@ -305,6 +305,14 @@ cgenFunctionBodyScoped inScope retTy = \case
       intptr_t $fldTmp = $fldExpr;
       return ($retTy)lithic_record_select($recTmp, $fldTmp); |]
 
+  e@(CBinOp _ _ _ _) ->
+    let expr = cgenExprValueAs retTy e
+    in blk [c| return $expr; |]
+
+  e@(CNeg _ _) ->
+    let expr = cgenExprValueAs retTy e
+    in blk [c| return $expr;|]
+
   other ->
     let cExpr = cgenExprTag other
     in blk [c|
@@ -320,8 +328,11 @@ cgenFunctionBodyScoped inScope retTy = \case
 -- zero placeholder.
 cgenExprValue :: CoreExpr -> Text
 cgenExprValue = \case
+
   CLit _ lit     -> cgenLiteralValue lit
+
   CVar _ varName -> varName
+
   appExpr@(CApp _ _ _) ->
     let (callee, args) = collectArgs appExpr
     in case callee of
@@ -331,12 +342,31 @@ cgenExprValue = \case
         in [c|$cFnName($argVals)|] 
       _ ->
         "/* unsupported-rhs:" <> cgenExprTag appExpr <> " */ (intptr_t)0"
+
   CSelect _ recordExpr fieldName ->
     let recVal = cgenExprValue recordExpr
         fldTag = cgenFieldTag fieldName
     in [c|lithic_record_select($recVal, $fldTag)|]
+
+  CBinOp _ op lhs rhs ->
+    let elhs = cgenExprValue lhs
+        opSym = arithOpSym op 
+        erhs = cgenExprValue rhs
+    in [c|($elhs $opSym $erhs)|]
+
+  CNeg _ op ->
+    "(-" <> cgenExprValue op <> ")"
+
   other ->
     "/* unsupported-rhs:" <> cgenExprTag other <> " */ (intptr_t)0" 
+
+-- | Map a Core arithmetic operator to its C infix symbol.
+arithOpSym :: ArithOp -> Text
+arithOpSym = \case
+  AAdd -> "+"
+  ASub -> "-"
+  AMul -> "*"
+  ADiv -> "/"
 
 -- | Emit a C expression coerced to a target C type.
 -- This is used where fallback typing can otherwise produce invalid C
@@ -573,6 +603,8 @@ cgenExprTag = \case
   CVariant{} -> "CVariant"
   CRecord{}  -> "CRecord"
   CSelect{}  -> "CSelect"
+  CBinOp{}   -> "CBinOp"
+  CNeg{}     -> "CNeg"
 
 -- | Compact pattern tag for placeholder let-binding comments.
 cgenPatternTag :: CorePattern -> Text

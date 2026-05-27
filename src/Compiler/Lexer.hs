@@ -32,6 +32,9 @@ data TokenClass
   | TokFatArrow     -- ^ The operator for lambdas
   | TokAssign       -- ^ The `=` operator
   | TokMinus        -- ^ The `-` minus operator
+  | TokPlus         -- ^ The `+` plus operator
+  | TokStar         -- ^ The `*` multiply operator
+  | TokSlash        -- ^ The `/` divide operator
   | TokLParen 
   | TokRParen
   | TokForall       -- ^ `forall` operator
@@ -126,7 +129,7 @@ scanTokens st ex = loop []
                 rest <- consumeWhile (\x -> isAlphaNum x || x == '_' || x == '\'') st
                 emit (TokIdent (T.cons '_' rest)) startSt acc
               _ -> emit TokWildcard startSt acc
-
+          
           Just '"' -> do
             strText <- consumeWhile (/= '"') st
             endQuote <- advance st -- consume closing quote
@@ -155,7 +158,6 @@ scanTokens st ex = loop []
                 MkLexError "Unexpected character '%'. Did you mean %= for lens update?" 
                   startSt.line startSt.col
 
-
           -- Two character `=>` requires a lookahead, with fallback to `=`
           Just '=' -> do
             next <- peek st
@@ -181,6 +183,13 @@ scanTokens st ex = loop []
               _ -> 
                 -- Fallback: it's a standard minus sign
                 emit TokMinus startSt acc
+
+          Just '+' -> emit TokPlus startSt acc
+
+          Just '*' -> emit TokStar startSt acc
+
+          Just '/' -> emit TokSlash startSt acc
+
           
           -- Identifiers and keywords
           Just c | isAlpha c -> do

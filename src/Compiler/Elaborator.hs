@@ -72,10 +72,13 @@ elabExpr = \case
   Ann _ inner _ -> elabExpr inner
   RecUpdate sp _ _ _ _ ->
     elabFail sp "RecUpdate is out of scope for the initial Core subset."
-  Unary sp _ _ ->
-    elabFail sp "Unary operations are not yet in the initial Core subset."
-  Binary sp _ _ _ ->
-    elabFail sp "Binary operations are not yet in the initial Core subset."
+  Unary _ UMinus e -> do
+    ce <- elabExpr e
+    Right (CNeg (getCoreSpan ce) ce)
+  Binary sp op e1 e2 -> do
+    ce1 <- elabExpr e1
+    ce2 <- elabExpr e2
+    Right (CBinOp sp (toArithOp op) ce1 ce2)
 
 -- | Elaborate a surface pattern into a core pattern
 elabPattern :: Pattern -> Either ElabError CorePattern
@@ -107,6 +110,14 @@ collectRecordFields = go []
         RecEmpty _ -> Right (reverse acc)
         RecExtend _ label field rest -> go ((label, field) : acc) rest
         _ -> elabFail (getSpan e) "Record core lowering expects a closed literal ending in {}."
+
+-- | Convert a surface binary operator to a Core arithmetic operator.
+toArithOp :: BinOp -> ArithOp
+toArithOp = \case
+  OpAdd -> AAdd
+  OpSub -> ASub
+  OpMul -> AMul
+  OpDiv -> ADiv
 
 -- | construct a typed elaboration failure
 elabFail :: forall a. Span -> Text -> Either ElabError a

@@ -152,43 +152,14 @@ infer st env ex expr =
         NumericNonNumeric ->
           throw ex $ MkTypeError "Cannot apply unary minus to a non-numeric type." (getSpan e)
 
-    Binary sp OpSub e1 e2 -> do
-      ty1 <- infer st env ex e1
-      ty2 <- infer st env ex e2
-      forcedTy1 <- force st ty1
-      forcedTy2 <- force st ty2
-      case (classifyNumeric forcedTy1, classifyNumeric forcedTy2) of
-        (NumericInt, NumericInt) -> pure $ TInt sp
-        (NumericFloat, NumericFloat) -> pure $ TFloat sp
+    Binary sp OpSub e1 e2 -> inferBinArith "subtraction"    sp e1 e2 st env ex
 
-        (NumericInt, NumericMeta) -> do
-          unify st ex ty2 (TInt (getSpan e2)) sp
-          pure $ TInt sp
-        (NumericMeta, NumericInt) -> do
-          unify st ex ty1 (TInt (getSpan e1)) sp
-          pure $ TInt sp
+    Binary sp OpAdd e1 e2 -> inferBinArith "addition"       sp e1 e2 st env ex
 
-        (NumericFloat, NumericMeta) -> do
-          unify st ex ty2 (TFloat (getSpan e2)) sp
-          pure $ TFloat sp
-        (NumericMeta, NumericFloat) -> do
-          unify st ex ty1 (TFloat (getSpan e1)) sp
-          pure $ TFloat sp
-
-        (NumericInt, NumericFloat) ->
-          throw ex $ MkTypeError "Subtraction operands must both be Int or both be Float." sp
-        (NumericFloat, NumericInt) ->
-          throw ex $ MkTypeError "Subtraction operands must both be Int or both be Float." sp
-
-        (NumericMeta, NumericMeta) ->
-          throw ex $ MkTypeError
-            "Ambiguous subtraction on unresolved operands; add a type annotation to disambiguate Int vs Float."
-            sp
-
-        (NumericNonNumeric, _) ->
-          throw ex $ MkTypeError "Left operand of subtraction must be numeric." (getSpan e1)
-        (_, NumericNonNumeric) ->
-          throw ex $ MkTypeError "Right operand of subtraction must be numeric." (getSpan e2)
+    Binary sp OpMul e1 e2 -> inferBinArith "multiplication" sp e1 e2 st env ex
+    
+    Binary sp OpDiv e1 e2 -> inferBinArith "division"       sp e1 e2 st env ex
+    
     Var sp x -> do
       currentEnv <- ask env
       case lookup x currentEnv.bindings of
@@ -344,7 +315,42 @@ infer st env ex expr =
           unify st ex expectedFuncTy valTy sp
       -- Functional updates are non-destructive; the expression returns the base record's type
       pure recTy
-      
+
+-- | Type-check a binary arithmetic operation.
+-- Both operands must have the same numeric type (Int or Float); the
+-- result type matches the operatnds. Ambiguous meta-variable operands
+-- are constrained by the other operand when possible.
+inferBinArith
+  :: forall st r ex es. (st :> es, r :> es, ex :> es)
+  => Text -> Span -> Expr -> Expr -> State TCState st -> Reader Env r -> Exception TypeError ex -> Eff es Type
+inferBinArith opName sp e1 e2 st env ex = do
+  ty1 <- infer st env ex e1
+  ty2 <- infer st env ex e2
+  forcedTy1 <- force st ty1
+  forcedTy2 <- force st ty2
+  case (classifyNumeric forcedTy1, classifyNumeric forcedTy2) of
+    (NumericInt,   NumericInt)   -> pure $ TInt sp
+    (NumericFloat, NumericFloat) -> pure $ TFloat sp
+    (NumericInt,   NumericMeta)  -> unify st ex ty2 (TInt   (getSpan e2)) sp >> pure (TInt sp)
+    (NumericMeta,  NumericInt)   -> unify st ex ty1 (TInt   (getSpan e1)) sp >> pure (TInt sp)
+    (NumericFloat, NumericMeta)  -> unify st ex ty2 (TFloat (getSpan e2)) sp >> pure (TFloat sp)
+    (NumericMeta,  NumericFloat) -> unify st ex ty1 (TFloat (getSpan e1)) sp >> pure (TFloat sp)
+    (NumericInt,   NumericFloat) ->
+      throw ex $ MkTypeError
+        ("Both operands of " <> opName <> " must be the same numeric type (Int or Float).") sp
+    (NumericFloat,   NumericInt) ->
+      throw ex $ MkTypeError
+        ("Both operands of " <> opName <> " must be the same numeric type (Int or Float).") sp
+    (NumericMeta,   NumericMeta) ->
+      throw ex $ MkTypeError
+        ("Ambiguous " <> opName <> " on unresolved operands; add a type annotation.") sp
+    (NumericNonNumeric, _) ->
+      throw ex $ MkTypeError 
+        ("Left operand of " <> opName <> " must be numeric.") (getSpan e1)
+    (_, NumericNonNumeric) ->
+      throw ex $ MkTypeError 
+        ("Right operand of " <> opName <> " must be numeric.") (getSpan e2)
+        
 -- | Check that an expression satisfies an expected type.
 check 
   :: forall st env ex es. (st :> es, env :> es, ex :> es) 

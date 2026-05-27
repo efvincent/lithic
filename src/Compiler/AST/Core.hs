@@ -5,6 +5,12 @@ import GHC.Generics (Generic)
 
 import Compiler.AST (Literal, Span, Type)
 
+-- | Core arithmetic binary operators.
+-- Definied here (not reusing surface @BinOp@) to keep Core independent of
+-- surface syntax decisions.
+data ArithOp = AAdd | ASub | AMul | ADiv
+  deriving (Show, Eq, Generic)
+
 -- | Core patterns for the Phase 8 evaluator subset
 data CorePattern
   = CPVar      Span Text
@@ -25,6 +31,10 @@ data CoreExpr
   | CVariant Span Text CoreExpr
   | CRecord  Span [(Text, CoreExpr)]
   | CSelect  Span CoreExpr Text
+  | CBinOp   Span ArithOp CoreExpr CoreExpr
+  -- ^  Binary arithmetic: @lhs op rhs@, both operands at @intptr_t@/@double@.
+  | CNeg     Span CoreExpr
+  -- $^ Unary arithmetic negation: @-operand@
   deriving (Show, Eq, Generic)
 
 -- | Core declaration form for declaration-aware elaboration.
@@ -60,6 +70,8 @@ getCoreSpan = \case
   CVariant sp _ _ -> sp
   CRecord sp _    -> sp
   CSelect sp _ _  -> sp
+  CBinOp sp _ _ _ -> sp
+  CNeg sp _       -> sp
 
 -- | Extract the source span from a core declaration.
 getCoreDeclSpan :: CoreDecl -> Span

@@ -65,21 +65,13 @@ elaboratorUnitTests =
           Right other ->
             assertFailure ("Expected elaboration failure, got: " <> show other)
 
-    , testCase "unary operations are explicitly out of initial core scope" $
-        case elabExpr (Unary sp UMinus (Lit sp (LInt 1))) of
-          Left (MkElabError msg errSpan) -> do
-            errSpan @?= sp
-            msg @?= "Unary operations are not yet in the initial Core subset."
-          Right other ->
-            assertFailure ("Expected elaboration failure, got: " <> show other)
+    , testCase "unary minus elaborates to CNeg" $
+        elabExpr (Unary sp UMinus (Lit sp (LInt 1)))
+          @?= Right (CNeg sp (CLit sp (LInt 1)))
 
-    , testCase "binary operations are explicitly out of initial core scope" $
-        case elabExpr (Binary sp OpSub (Lit sp (LInt 2)) (Lit sp (LInt 1))) of
-          Left (MkElabError msg errSpan) -> do
-            errSpan @?= sp
-            msg @?= "Binary operations are not yet in the initial Core subset."
-          Right other ->
-            assertFailure ("Expected elaboration failure, got: " <> show other)
+    , testCase "binary subtraction elaborates to CBinOp ASub" $
+        elabExpr (Binary sp OpSub (Lit sp (LInt 2)) (Lit sp (LInt 1)))
+          @?= Right (CBinOp sp ASub (CLit sp (LInt 2)) (CLit sp (LInt 1)))
     ]
   where
     caseExpr =

@@ -1,3 +1,4 @@
 [AST] Let [2,1]..[4,4] (PVar [2,5]..[2,5] "x") (Unary [2,9]..[2,11] UMinus (Lit [2,10]..[2,11] (LInt 42))) (Let [3,1]..[4,4] (PVar [3,5]..[3,5] "y") (Binary [3,9]..[3,15] OpSub (Lit [3,9]..[3,11] (LInt 100)) (Var [3,15]..[3,15] "x")) (Var [4,4]..[4,4] "y"))
 [Type] TInt [3,9]..[3,15]
-[Core Error] Unary operations are not yet in the initial Core subset. at [2,9]..[2,11]
+[Core] CLet [2,1]..[4,4] (CPVar [2,5]..[2,5] "x") (CNeg [2,10]..[2,11] (CLit [2,10]..[2,11] (LInt 42))) (CLet [3,1]..[4,4] (CPVar [3,5]..[3,5] "y") (CBinOp [3,9]..[3,15] ASub (CLit [3,9]..[3,11] (LInt 100)) (CVar [3,15]..[3,15] "x")) (CVar [4,4]..[4,4] "y"))
+[Val] VLit (LInt 142)
