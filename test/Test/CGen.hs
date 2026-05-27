@@ -19,7 +19,7 @@ import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (assertFailure, testCase, (@?))
 
 import Compiler.AST (Span(..), Type(..))
-import Compiler.AST.Core (CoreDecl(..), CoreExpr(..), CorePattern(..))
+import Compiler.AST.Core (ArithOp(..), CoreDecl(..), CoreExpr(..), CorePattern(..))
 import Compiler.AST (Literal(..))
 import Compiler.CGen (cgenProgram)
 
@@ -161,6 +161,22 @@ cgenUnitTests =
         let out = cgenProgram [(defLetSelectDecl, Nothing)]
          in T.isInfixOf "intptr_t y = (intptr_t)lithic_record_select(r," out
               @? "let-local select RHS should lower via inline record_select expression"
+
+    , testCase "arithmetic binary expressions emit parenthesized C operators and compile" $
+        let out = cgenProgram
+              [ (defArithmeticDecl, Just (TArrow sp0 (TInt sp0) (TInt sp0))) ]
+         in do
+          T.isInfixOf "((x + (int64_t)1) * ((int64_t)8 / (int64_t)2))" out
+            @? "binary arithmetic should emit direct parenthesized C operators"
+          assertCompilesWithGcc "arithmetic-binary" out
+
+    , testCase "unary negation parenthesizes compound operands and compiles" $
+        let out = cgenProgram
+              [ (defNegCompoundDecl, Just (TArrow sp0 (TInt sp0) (TInt sp0))) ]
+         in do
+          T.isInfixOf "(-((x + (int64_t)1)))" out
+            @? "unary negation should parenthesize its full operand expression"
+          assertCompilesWithGcc "arithmetic-neg-compound" out
 
     , testCase "declarations are emitted in input order" $
         let out = cgenProgram [(defADecl, Nothing), (defBDecl, Nothing)]
@@ -536,6 +552,25 @@ cgenUnitTests =
           (CLet sp0 (CPVar sp0 "y")
             (CSelect sp0 (CVar sp0 "r") "x")
             (CVar sp0 "y")))
+
+    defArithmeticDecl =
+      CDeclDef sp0 "arith"
+        (CLam sp0 (CPVar sp0 "x")
+          (CBinOp sp0 AMul
+            (CBinOp sp0 AAdd
+              (CVar sp0 "x")
+              (CLit sp0 (LInt 1)))
+            (CBinOp sp0 ADiv
+              (CLit sp0 (LInt 8))
+              (CLit sp0 (LInt 2)))))
+
+    defNegCompoundDecl =
+      CDeclDef sp0 "negCompound"
+        (CLam sp0 (CPVar sp0 "x")
+          (CNeg sp0
+            (CBinOp sp0 AAdd
+              (CVar sp0 "x")
+              (CLit sp0 (LInt 1)))))
 
     -- Float and String literal bodies
     defFloatDecl =

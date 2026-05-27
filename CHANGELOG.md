@@ -1,5 +1,21 @@
 # Revision history for lithic
 
+## 0.9.18.0 -- 2026-05-27 (Phase 10 C3.6 Arithmetic Lowering)
+
+* Phase 10 C3.6 arithmetic lowering:
+	* Extended lexer and Pratt parser support for `+`, `*`, and `/`, including a dedicated `PrecMul` precedence tier.
+	* Lowered surface unary minus and binary arithmetic into Core via `CNeg` and `CBinOp` with the new `ArithOp` carrier.
+	* Added evaluator support for Core arithmetic expressions over `Int` and `Float`.
+	* Added C codegen support for Core arithmetic expressions and corrected unary-negation emission to preserve grouped operand semantics in generated C.
+	* Preserved unary expression spans during elaboration so diagnostics continue to point at the full unary form.
+* Test coverage:
+	* Updated stale elaborator expectations and refreshed `minus-basic` / `minus-precedence` goldens for Core + evaluator output.
+	* Added focused CGen unit coverage in `test/Test/CGen.hs` for binary arithmetic emission and compound unary-negation emission, including gcc compile checks.
+	* Added golden fixtures for arithmetic precedence, grouping, division associativity, and unary/binary interaction.
+* Validation:
+	* Focused CGen suite: `cabal test lithic-test --test-options='-p "CGen Unit Tests"'` (47 passing)
+	* Golden suite acceptance: `cabal test lithic-test --test-options='--accept -p "Golden Tests"'` (42 passing)
+
 ## 0.9.17.0 -- 2026-05-26 (Phase 10 C3.5 Case/Expr-Value Lowering + CLI Bool-Case Coverage)
 
 * Phase 10 C3.5 lowering depth:
