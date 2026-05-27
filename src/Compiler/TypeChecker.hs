@@ -318,7 +318,7 @@ infer st env ex expr =
 
 -- | Type-check a binary arithmetic operation.
 -- Both operands must have the same numeric type (Int or Float); the
--- result type matches the operatnds. Ambiguous meta-variable operands
+-- result type matches the operands. Ambiguous meta-variable operands
 -- are constrained by the other operand when possible.
 inferBinArith
   :: forall st r ex es. (st :> es, r :> es, ex :> es)

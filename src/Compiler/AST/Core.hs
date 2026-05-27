@@ -6,7 +6,7 @@ import GHC.Generics (Generic)
 import Compiler.AST (Literal, Span, Type)
 
 -- | Core arithmetic binary operators.
--- Definied here (not reusing surface @BinOp@) to keep Core independent of
+-- Defined here (not reusing surface @BinOp@) to keep Core independent of
 -- surface syntax decisions.
 data ArithOp = AAdd | ASub | AMul | ADiv
   deriving (Show, Eq, Generic)
@@ -32,9 +32,9 @@ data CoreExpr
   | CRecord  Span [(Text, CoreExpr)]
   | CSelect  Span CoreExpr Text
   | CBinOp   Span ArithOp CoreExpr CoreExpr
-  -- ^  Binary arithmetic: @lhs op rhs@, both operands at @intptr_t@/@double@.
+  -- ^ Binary arithmetic: @lhs op rhs@.
   | CNeg     Span CoreExpr
-  -- $^ Unary arithmetic negation: @-operand@
+  -- ^ Unary arithmetic negation: @-operand@.
   deriving (Show, Eq, Generic)
 
 -- | Core declaration form for declaration-aware elaboration.

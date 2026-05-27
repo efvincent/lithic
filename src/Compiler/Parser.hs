@@ -20,11 +20,11 @@ data Precedence
   = PrecLowest   -- ^ Base precedence for standard expressions
   | PrecAnn      -- ^ Type annotations (e.g., @expr : Type@)
   | PrecAdd      -- ^ Addition / subtraction
-  | PrecMul      -- ^ Mupltiplication / division
-  | PrecApp      -- ^ Function application (e.g., @f x@)
-  | PrecPrefix   -- ^ Unary prefix operations (e.g., @-x@)
-  | PrecSelect   -- ^ Record field selection (e.g., @record.x@)
-  deriving (Eq, Ord, Show, Generic)
+  | PrecMul      -- ^ Multiplication / division
+  | PrecApp      -- ^ Function application
+  | PrecPrefix   -- ^ Prefix operators
+  | PrecSelect   -- ^ Record selection
+  deriving (Eq, Ord, Show, Enum)
 
 -- | Helper to map Precedence to an integer for Pratt comparison logic
 precVal :: Precedence -> Int

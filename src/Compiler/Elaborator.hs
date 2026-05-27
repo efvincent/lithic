@@ -72,9 +72,9 @@ elabExpr = \case
   Ann _ inner _ -> elabExpr inner
   RecUpdate sp _ _ _ _ ->
     elabFail sp "RecUpdate is out of scope for the initial Core subset."
-  Unary _ UMinus e -> do
+  Unary sp UMinus e -> do
     ce <- elabExpr e
-    Right (CNeg (getCoreSpan ce) ce)
+    Right (CNeg sp ce)
   Binary sp op e1 e2 -> do
     ce1 <- elabExpr e1
     ce2 <- elabExpr e2

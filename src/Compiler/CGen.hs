@@ -355,7 +355,8 @@ cgenExprValue = \case
     in [c|($elhs $opSym $erhs)|]
 
   CNeg _ op ->
-    "(-" <> cgenExprValue op <> ")"
+    let eop = cgenExprValue op
+    in [c|(-($eop))|]
 
   other ->
     "/* unsupported-rhs:" <> cgenExprTag other <> " */ (intptr_t)0" 
