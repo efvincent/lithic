@@ -20,10 +20,11 @@ data Precedence
   = PrecLowest   -- ^ Base precedence for standard expressions
   | PrecAnn      -- ^ Type annotations (e.g., @expr : Type@)
   | PrecAdd      -- ^ Addition / subtraction
-  | PrecApp      -- ^ Function application (e.g., @f x@)
-  | PrecPrefix   -- ^ Unary prefix operations (e.g., @-x@)
-  | PrecSelect   -- ^ Record field selection (e.g., @record.x@)
-  deriving (Eq, Ord, Show, Generic)
+  | PrecMul      -- ^ Multiplication / division
+  | PrecApp      -- ^ Function application
+  | PrecPrefix   -- ^ Prefix operators
+  | PrecSelect   -- ^ Record selection
+  deriving (Eq, Ord, Show, Enum)
 
 -- | Helper to map Precedence to an integer for Pratt comparison logic
 precVal :: Precedence -> Int
@@ -31,6 +32,7 @@ precVal = \case
   PrecLowest -> 0
   PrecAnn    -> 5
   PrecAdd    -> 10
+  PrecMul    -> 20
   PrecApp    -> 30
   PrecPrefix -> 35
   PrecSelect -> 40
@@ -76,6 +78,9 @@ tokenPrecedence = \case
   cls | isAppStarter cls -> precVal PrecApp
   TokDot                 -> precVal PrecSelect
   TokMinus               -> precVal PrecAdd
+  TokPlus                -> precVal PrecAdd
+  TokStar                -> precVal PrecMul
+  TokSlash               -> precVal PrecMul
   _                      -> precVal PrecLowest
 
 -- | Checks the precedence of the upcoming token without consuming it.
@@ -809,6 +814,18 @@ parseLed left tok st ex = case tok.cls of
     -- Parse the right-hand side at addition/subtraction precedence
     right <- parseExpr (precVal PrecAdd) st ex
     pure $ Binary (mergeSpan (getSpan left) (getSpan right)) OpSub left right
+
+  TokPlus -> do
+    right <- parseExpr (precVal PrecAdd) st ex
+    pure $ Binary (mergeSpan (getSpan left) (getSpan right)) OpAdd left right
+
+  TokStar -> do
+    right <- parseExpr (precVal PrecMul) st ex
+    pure $ Binary (mergeSpan (getSpan left) (getSpan right)) OpMul left right
+  
+  TokSlash -> do
+    right <- parseExpr (precVal PrecMul) st ex
+    pure $ Binary (mergeSpan (getSpan left) (getSpan right)) OpDiv left right
 
   -- | Parses record selection (record.x) OR deep updates (record.{ x.y := 42 })
   TokDot -> do

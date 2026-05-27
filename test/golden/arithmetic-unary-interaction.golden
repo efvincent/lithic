@@ -1,0 +1,4 @@
+[AST] Binary [1,1]..[1,12] OpMul (Unary [1,1]..[1,7] UMinus (Binary [1,3]..[1,7] OpAdd (Lit [1,3]..[1,3] (LInt 1)) (Lit [1,7]..[1,7] (LInt 2)))) (Lit [1,12]..[1,12] (LInt 3))
+[Type] TInt [1,1]..[1,12]
+[Core] CBinOp [1,1]..[1,12] AMul (CNeg [1,1]..[1,7] (CBinOp [1,3]..[1,7] AAdd (CLit [1,3]..[1,3] (LInt 1)) (CLit [1,7]..[1,7] (LInt 2)))) (CLit [1,12]..[1,12] (LInt 3))
+[Val] VLit (LInt (-9))

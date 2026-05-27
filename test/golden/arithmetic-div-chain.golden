@@ -1,0 +1,4 @@
+[AST] Binary [1,1]..[1,9] OpDiv (Binary [1,1]..[1,5] OpDiv (Lit [1,1]..[1,1] (LInt 8)) (Lit [1,5]..[1,5] (LInt 4))) (Lit [1,9]..[1,9] (LInt 2))
+[Type] TInt [1,1]..[1,9]
+[Core] CBinOp [1,1]..[1,9] ADiv (CBinOp [1,1]..[1,5] ADiv (CLit [1,1]..[1,1] (LInt 8)) (CLit [1,5]..[1,5] (LInt 4))) (CLit [1,9]..[1,9] (LInt 2))
+[Val] VLit (LInt 1)

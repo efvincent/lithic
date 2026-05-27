@@ -13,7 +13,7 @@ import Bluefin.Eff ((:>), Eff, runPureEff)
 import Bluefin.Exception (Exception, throw, try)
 import Bluefin.Reader (Reader, ask, runReader)
 
-import Compiler.AST (Literal, Span)
+import Compiler.AST (Literal(..), Span)
 import Compiler.AST.Core
 
 type Env = Map Text Value
@@ -95,6 +95,34 @@ evalIn env ex expr  =
     CRecord _ fields -> do
       fieldVals <- traverse (\(label, e) -> (label,) <$> evalIn env ex e) fields
       pure (VRecord fieldVals)
+
+    CBinOp sp op lhs rhs -> do
+      lhsVal <- evalIn env ex lhs
+      rhsVal <- evalIn env ex rhs
+      case (lhsVal, rhsVal) of
+        (VLit (LInt a), VLit (LInt b)) ->
+          case op of
+            AAdd -> pure (VLit (LInt (a + b)))
+            ASub -> pure (VLit (LInt (a - b)))
+            AMul -> pure (VLit (LInt (a * b)))
+            ADiv
+              | b == 0 -> throw ex (EvalNotImplemented sp "Division by zero")
+              | otherwise -> pure (VLit (LInt (a `div` b)))
+        (VLit (LFloat a), VLit (LFloat b)) ->
+          case op of
+            AAdd -> pure (VLit (LFloat (a + b)))
+            ASub -> pure (VLit (LFloat (a - b)))
+            AMul -> pure (VLit (LFloat (a * b)))
+            ADiv -> pure (VLit (LFloat (a / b)))
+        _ ->
+          throw ex $ EvalNotImplemented sp "CBinOp: operands must be numeric and of the same type"
+    
+    CNeg sp e -> do
+      val <- evalIn env ex e
+      case val of 
+        VLit (LInt n)   -> pure (VLit (LInt (negate n)))
+        VLit (LFloat f) -> pure (VLit (LFloat (negate f)))
+        _ -> throw ex $ EvalNotImplemented sp "CNeg: operand must be numeric"
 
     CSelect sp record label -> do
       recVal <- evalIn env ex record

@@ -71,7 +71,12 @@ data Type
 data UnOp  = UMinus deriving (Show, Eq, Generic)
 
 -- | Binary operator forms currently represented in surface syntax.
-data BinOp = OpSub deriving (Show, Eq, Generic)
+data BinOp 
+  = OpSub 
+  | OpAdd
+  | OpMul
+  | OpDiv
+  deriving (Show, Eq, Generic)
 
 -- | Defines the type of lens operation being performed
 data UpdateOp
