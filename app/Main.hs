@@ -26,7 +26,7 @@ import Compiler.Lexer (runLexer, LexError(..))
 import Compiler.Parser (parseTopLevel, ParseError(..))
 import Compiler.REPL (replLoop, runTerminalBrick)
 import Compiler.TUI (runTUI, TUIEvent(..))
-import Compiler.TypeChecker (Env(..), TCState(..), TypeError(..), infer, zonk)
+import Compiler.TypeChecker (TCState(..), TypeError(..), builtinEnv, infer, zonk)
 import Compiler.TypeChecker ()
 
 main :: IO ()
@@ -75,7 +75,7 @@ runEmitC srcPath outPath = do
                   let tcResult =
                         runPureEff $ evalState (MkTCState 0 IM.empty) \st -> 
                         try                                           \ex -> 
-                        runReader (MkEnv [])                          \env -> do
+                        runReader builtinEnv                          \env -> do
                           rawTy <- infer st env ex rhs
                           zonk st rawTy
                   case tcResult of

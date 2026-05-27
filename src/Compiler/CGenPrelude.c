@@ -361,6 +361,64 @@ static inline intptr_t lithic_record_select(intptr_t record, intptr_t field) {
   return (intptr_t)0;
 }
 
+/*
+ * Builtin: print
+ *
+ * Treats the incoming intptr_t as a C string pointer, writes it to stdout,
+ * and returns the original handle.
+ */
+static inline intptr_t lithic_builtin_print(intptr_t value) {
+  if (value == (intptr_t)0) {
+    return (intptr_t)0;
+  }
+  const char *s = (const char *)(uintptr_t)value;
+  fputs(s, stdout);
+  fflush(stdout);
+  return value;
+}
+
+/*
+ * Builtin: readLn
+ *
+ * Reads a single line from stdin, stopping on `\r` or `\n`.
+ * Returns a heap-allocated NUL-terminated string handle, or 0 on EOF/failure.
+ */
+static inline intptr_t lithic_builtin_readln(void) {
+  size_t cap = 128;
+  char *buf = (char *)malloc(cap);
+  if (buf == NULL) {
+    return (intptr_t)0;
+  }
+
+  size_t len = 0;
+  int ch;
+  while ((ch = fgetc(stdin)) != EOF) {
+    if (ch == '\n' || ch == '\r') {
+      break;
+    }
+
+    if (len + 1 >= cap) {
+      size_t nextCap = cap * 2;
+      char *grown = (char *)realloc(buf, nextCap);
+      if (grown == NULL) {
+        free(buf);
+        return (intptr_t)0;
+      }
+      buf = grown;
+      cap = nextCap;
+    }
+    buf[len++] = (char)ch;
+  }
+
+  if (ch == EOF && len == 0) {
+    free(buf);
+    return (intptr_t)0;
+  }
+
+  buf[len] = '\0';
+  return (intptr_t)(uintptr_t)buf;
+}
+
 /* Marker helper used by unsupported generated paths in scaffold stages. */
 static inline void lithic_unsupported_fn(intptr_t arg) {
   (void)arg;

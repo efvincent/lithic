@@ -169,6 +169,29 @@ cliEmitCTests =
             assertBool "generated C should include bool case guards"
               (T.isInfixOf "lithic_case_scrut" out)
             assertCompilesWithGcc outPath
+
+      , testCase "terminal IO builtins emit C main wrapper and helper calls" $ do
+          cliPath <- getCliPath
+          withTempLithicSource "def main = print readLn\n" \srcPath ->
+            withTempOutputPath \outPath -> do
+              (ec, stdOut, stdErr) <- runEmitC cliPath ["--emit-c", srcPath, "-o", outPath]
+              case ec of
+                ExitSuccess -> pure ()
+                ExitFailure _ ->
+                  assertFailure $
+                    unlines
+                      [ "Expected terminal IO fixture emit-c to succeed"
+                      , "stdout: " <> stdOut
+                      , "stderr: " <> stdErr
+                      ]
+              out <- TIO.readFile outPath
+              assertBool "generated C should include C main wrapper"
+                (T.isInfixOf "int main(void)" out)
+              assertBool "generated C should call print helper"
+                (T.isInfixOf "lithic_builtin_print" out)
+              assertBool "generated C should call readLn helper"
+                (T.isInfixOf "lithic_builtin_readln()" out)
+              assertCompilesWithGcc outPath
       ]
 
 runEmitC :: FilePath -> [String] -> IO (ExitCode, String, String)

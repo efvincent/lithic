@@ -178,6 +178,30 @@ cgenUnitTests =
             @? "unary negation should parenthesize its full operand expression"
           assertCompilesWithGcc "arithmetic-neg-compound" out
 
+    , testCase "main declaration emits C entrypoint wrapper" $
+        let out = cgenProgram [(defMainPrintDecl, Just (TString sp0))]
+         in do
+          T.isInfixOf "const char* lithic_main(void)" out
+            @? "zero-arg Lithic main should emit a callable C helper"
+          T.isInfixOf "int main(void)" out
+            @? "zero-arg Lithic main should trigger C main wrapper emission"
+          T.isInfixOf "(void)lithic_main();" out
+            @? "C main wrapper should invoke lithic_main"
+
+    , testCase "print builtin lowers through runtime helper and compiles" $
+        let out = cgenProgram [(defMainPrintDecl, Just (TString sp0))]
+         in do
+          T.isInfixOf "lithic_builtin_print" out
+            @? "print builtin should lower to the runtime print helper"
+          assertCompilesWithGcc "builtin-print" out
+
+    , testCase "readLn builtin lowers through runtime helper and compiles" $
+        let out = cgenProgram [(defReadLnDecl, Just (TString sp0))]
+         in do
+          T.isInfixOf "lithic_builtin_readln()" out
+            @? "readLn builtin should lower to the runtime readLn helper"
+          assertCompilesWithGcc "builtin-readln" out
+
     , testCase "declarations are emitted in input order" $
         let out = cgenProgram [(defADecl, Nothing), (defBDecl, Nothing)]
             posA = firstIndex "/* definition: a */" out
@@ -571,6 +595,14 @@ cgenUnitTests =
             (CBinOp sp0 AAdd
               (CVar sp0 "x")
               (CLit sp0 (LInt 1)))))
+
+    defMainPrintDecl =
+      CDeclDef sp0 "main"
+        (CApp sp0 (CVar sp0 "print") (CLit sp0 (LString "hello")))
+
+    defReadLnDecl =
+      CDeclDef sp0 "readInput"
+        (CVar sp0 "readLn")
 
     -- Float and String literal bodies
     defFloatDecl =

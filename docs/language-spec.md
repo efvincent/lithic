@@ -1,8 +1,8 @@
 # Lithic Language Specification (Living Core Spec)
 
 Status: Active living spec for implemented behavior.
-Version: 0.7 (2026-05-18)
-Scope baseline: Parser + bidirectional checker through Phase 10 C backend scaffold (literal-scrutinee coverage fix, REPL `[C]` output).
+Version: 0.8 (2026-05-27)
+Scope baseline: Parser + bidirectional checker through Phase 10 C backend scaffold and first-pass terminal IO builtins (`print`, `readLn`).
 
 This document is the normative source for the currently implemented Lithic surface language and static semantics. Where implementation and docs disagree, this spec is the authority to reconcile against.
 
@@ -56,6 +56,7 @@ Normative implemented semantics (this revision):
 2. Bidirectional static semantics through current `infer`/`check`/`subsumes` pipeline.
 3. Case-branch exhaustiveness and redundancy coverage semantics.
 4. REPL diagnostic envelope and span-locality contracts.
+5. First-pass compiler-provided builtin term bindings for terminal IO.
 
 Planned/informative semantics (non-normative in this revision):
 1. Evaluator operational semantics and value model.
@@ -228,6 +229,13 @@ Status table for planned declaration forms:
 | Guarded clause | `f p1 ... pn` then `| guard => expr` lines | Not implemented yet | Guard RHS uses fat arrow to remain consistent with term-level branch delimiters. |
 | Pattern-headed clause (single argument) | `f <pattern> = expr` | Implemented (parseTopLevel only) | Included in Phase 9F first-slice clause grouping and lowered through the same lambda/case path as other arity-1 clauses. |
 | Pattern-headed clause (multi argument) | `f <pattern1> <pattern2> ... = expr` | Not implemented yet | Awaiting the multi-argument clause-group follow-on slice. |
+
+Builtin term environment currently includes:
+
+| Name | Type | Implementation Status | Notes |
+| --- | --- | --- | --- |
+| `print` | `String -> String` | Implemented | First-pass terminal IO builtin. C lowering writes the string to stdout without appending a newline and returns the original string handle. |
+| `readLn` | `String` | Implemented | First-pass terminal IO builtin. C lowering reads one line from stdin, stopping on carriage return or newline. |
 
 ```text
 TopLevel ::= Decl | Expr
@@ -406,6 +414,7 @@ Current C2.1 codegen diagnostic note:
 1. Declaration codegen still requires monomorphic declaration types.
 2. When a declaration type includes unresolved polymorphism at the CGen boundary, the emitted `[C]` block includes:
        `codegen error: program is not fully monomorphic; instantiate before code generation`.
+3. A zero-argument Lithic declaration named `main` emits a generated C `main(void)` wrapper that invokes `lithic_main()`.
 
 Contract requirements:
 1. Diagnostics carry precise `Span` whenever an originating token/node exists.

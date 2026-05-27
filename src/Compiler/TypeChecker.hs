@@ -37,6 +37,21 @@ data Env = MkEnv
   { bindings :: ![(Text, Type)]
   } deriving (Show, Eq, Generic)
 
+-- | Stable span used for compiler-provided builtin bindings.
+builtinSpan :: Span
+builtinSpan = MkSpan 0 0 0 0
+
+-- | Builtin term environment shared by REPL, tests, and CLI pipelines.
+--
+-- Phase 10 temporary contracts:
+-- - @print : String -> String@
+-- - @readLn : String@
+builtinEnv :: Env
+builtinEnv = MkEnv
+  [ ("print", TArrow builtinSpan (TString builtinSpan) (TString builtinSpan))
+  , ("readLn", TString builtinSpan)
+  ]
+
 -- | Localized type errors utilizing parsed @Spans@
 data TypeError = MkTypeError
   { msg :: !Text
@@ -317,9 +332,9 @@ infer st env ex expr =
       pure recTy
 
 -- | Type-check a binary arithmetic operation.
--- Both operands must have the same numeric type (Int or Float); the
--- result type matches the operands. Ambiguous meta-variable operands
--- are constrained by the other operand when possible.
+-- Both operands must have the same numeric type (Int or Float); the result type
+-- matches the operands. Ambiguous meta-variable operands are constrained by the
+-- other operand when possible.
 inferBinArith
   :: forall st r ex es. (st :> es, r :> es, ex :> es)
   => Text -> Span -> Expr -> Expr -> State TCState st -> Reader Env r -> Exception TypeError ex -> Eff es Type

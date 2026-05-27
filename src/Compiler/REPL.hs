@@ -20,7 +20,7 @@ import Compiler.AST (Decl(..), Pattern(..), TopLevel(..), Type)
 import Compiler.TUI (TUIEvent(..))
 import Compiler.Lexer (runLexer, LexError(..))
 import Compiler.Parser (ParseError(..), parseTopLevel)
-import Compiler.TypeChecker (infer, generalize, Env(..), TypeError(..), TCState (..), zonk)
+import Compiler.TypeChecker (infer, generalize, Env(..), TypeError(..), TCState (..), builtinEnv, zonk)
 import Compiler.Elaborator (elabTopLevel, ElabError(..))
 import Compiler.CGen (cgenProgram)
 
@@ -35,7 +35,7 @@ data Terminal es = MkTerminal
 -- Maintains persistent type environment across submissions while sharing the
 -- same persistent unification state handle.
 replLoop :: forall st es. (st :> es) => Terminal es -> State TCState st -> Eff es ()
-replLoop term st = go (MkEnv [])
+replLoop term st = go builtinEnv
   where
     go :: Env -> Eff es ()
     go currentEnv = do
