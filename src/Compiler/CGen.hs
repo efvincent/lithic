@@ -34,6 +34,27 @@ cgenProgram pairs =
   cPreludeChunk
     <> cDeclCountComment pairs
     <> cDeclarationSection pairs
+    <> cMainEntrypoint pairs
+
+-- | Emit a C entrypoint wrapper when a zero-arg Lithic declaration is present.
+cMainEntrypoint :: Decls -> TB.Builder
+cMainEntrypoint pairs =
+  if hasMainDecl pairs
+  then TB.fromText $ blks [c|
+    int main(void) {
+      (void)lithic_main();
+      return 0;
+    } |]
+  else mempty
+
+hasMainDecl :: Decls -> Bool
+hasMainDecl = any isMainDecl
+  where
+    isMainDecl (CDeclDef _ name rhs, _) | name == "main" =
+      case declShape rhs of
+        DeclConstant _ -> True
+        _1             -> False
+    isMainDecl _ = False
 
 -- | Static C prelude
 cPreludeChunk :: TB.Builder
@@ -115,8 +136,8 @@ cgenDecl (decl, mTy) = case decl of
             let valTy = maybe "intptr_t" cgenCType mTy
                 fName = cFunctionName name
                 fBody = cgenExprValueAs valTy body
-             in TB.fromText $
-              if isStaticCInitializer body
+            in TB.fromText $
+              if name /= "main" && isStaticCInitializer body
               then blks [c|
               /* definition: $name */
               $valTy $fName = $fBody; |]
@@ -191,7 +212,9 @@ cgenFunctionBodyScoped inScope retTy = \case
     in blk [c| return ($retTy)$r; |]
 
   CVar _ varName ->
-    blk [c| return $varName; |]
+    case cgenBuiltinValue varName of
+      Just builtinExpr -> blk [c| return ($retTy)$builtinExpr; |]
+      Nothing -> blk [c| return $varName; |]
 
   -- Target 4: let-binding to stack-allocated local.
   -- Only CPVar patterns are precisely lowered; other patterns fall through
@@ -219,9 +242,12 @@ cgenFunctionBodyScoped inScope retTy = \case
     -- Any other call target shape falls back with an explicit diagnostic marker.
     case fn of
       CVar _ fnName ->
-        let calleeName = cgenCallName inScope fnName
-            argExpr = cgenExprValue arg
-        in blk [c| return ($retTy)$calleeName($argExpr); |]
+        let argExpr = cgenExprValue arg
+        in case cgenBuiltinCall fnName [argExpr] of
+          Just builtinExpr -> blk [c| return ($retTy)$builtinExpr; |]
+          Nothing ->
+            let calleeName = cgenCallName inScope fnName
+            in blk [c| return ($retTy)$calleeName($argExpr); |]
       unsupportedFn ->
         let cFnTag = cgenExprTag unsupportedFn
             cArg   = cgenExprTag arg
@@ -331,15 +357,22 @@ cgenExprValue = \case
 
   CLit _ lit     -> cgenLiteralValue lit
 
-  CVar _ varName -> varName
+  CVar _ varName ->
+    case cgenBuiltinValue varName of
+      Just builtinExpr -> builtinExpr
+      Nothing -> varName
 
   appExpr@(CApp _ _ _) ->
     let (callee, args) = collectArgs appExpr
     in case callee of
       CVar _ fnName ->
-        let cFnName = cFunctionName fnName
-            argVals = T.intercalate ", " (map cgenExprValue args)
-        in [c|$cFnName($argVals)|] 
+        let argVals = map cgenExprValue args
+        in case cgenBuiltinCall fnName argVals of
+          Just builtinExpr -> builtinExpr
+          Nothing ->
+            let cFnName = cFunctionName fnName
+                cArgs = T.intercalate ", " argVals
+            in [c|$cFnName($cArgs)|]
       _ ->
         "/* unsupported-rhs:" <> cgenExprTag appExpr <> " */ (intptr_t)0"
 
@@ -669,6 +702,16 @@ cgenRecordInitStep recTmp retTy ix (fieldName, fieldExpr) =
   |]
 
 -- ─── Utilities ────────────────────────────────────────────────────────────────
+
+cgenBuiltinValue :: Text -> Maybe Text
+cgenBuiltinValue name = case name of
+  "readLn" -> Just "lithic_builtin_readln()"
+  _        -> Nothing
+
+cgenBuiltinCall :: Text -> [Text] -> Maybe Text
+cgenBuiltinCall name args = case (name, args) of
+  ("print", [x]) -> Just [c|lithic_builtin_print((intptr_t)$x)|]
+  _              -> Nothing
 
 -- | Resolve a callable C name from a surface/Core variable name.
 -- Names already bound in local scope are emitted unchanged; all other names are

@@ -1,0 +1,1 @@
+Type Error: Cannot bind reserved builtin name: print at [1,2]..[1,6]

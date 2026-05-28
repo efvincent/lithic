@@ -21,7 +21,7 @@ import Compiler.Elaborator (ElabError(..), elabExpr)
 import Compiler.Evaluator (evalCore)
 import Compiler.Lexer (LexError(..), runLexer)
 import Compiler.Parser (ParseError(..), parseTopLevel)
-import Compiler.TypeChecker (Env(..), TCState(..), TypeError(..), infer, zonk)
+import Compiler.TypeChecker (TCState(..), TypeError(..), builtinEnv, infer, zonk)
 
 -- | Discover all golden tests under test/fixtures and pair them with the
 -- matching snapshots under test/golden.
@@ -81,6 +81,6 @@ renderTypedPipeline ast =
       runPureEff $
         evalState (MkTCState 0 IM.empty) \st ->
           try \ex ->
-            runReader (MkEnv []) \env -> do
+            runReader builtinEnv \env -> do
               rawTy <- infer st env ex ast
               zonk st rawTy

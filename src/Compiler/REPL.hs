@@ -20,7 +20,7 @@ import Compiler.AST (Decl(..), Pattern(..), TopLevel(..), Type)
 import Compiler.TUI (TUIEvent(..))
 import Compiler.Lexer (runLexer, LexError(..))
 import Compiler.Parser (ParseError(..), parseTopLevel)
-import Compiler.TypeChecker (infer, generalize, Env(..), TypeError(..), TCState (..), zonk)
+import Compiler.TypeChecker (infer, generalize, Env(..), TypeError(..), TCState (..), builtinEnv, isBuiltinName, zonk)
 import Compiler.Elaborator (elabTopLevel, ElabError(..))
 import Compiler.CGen (cgenProgram)
 
@@ -35,7 +35,7 @@ data Terminal es = MkTerminal
 -- Maintains persistent type environment across submissions while sharing the
 -- same persistent unification state handle.
 replLoop :: forall st es. (st :> es) => Terminal es -> State TCState st -> Eff es ()
-replLoop term st = go (MkEnv [])
+replLoop term st = go builtinEnv
   where
     go :: Env -> Eff es ()
     go currentEnv = do
@@ -111,30 +111,40 @@ replLoop term st = go (MkEnv [])
     handleDeclSubmission env decl =
       case decl of
         DeclSig _ name _ -> do
-          term.output $
-            "[Decl] " <> name <> " (signature accepted; persistence deferred in this slice)"
-          emitCodeGen (TDecl decl) Nothing
-          pure env
+          if isBuiltinName name
+          then do
+            term.output $ "Error: cannot declare reserved builtin name: " <> name
+            pure env
+          else do
+            term.output $
+              "[Decl] " <> name <> " (signature accepted; persistence deferred in this slice)"
+            emitCodeGen (TDecl decl) Nothing
+            pure env
 
         DeclDef _ pat rhs ->
           case pat of
             PVar _ name -> do
-              tcResult <- try \ex ->
-                runReader env \envHandle -> do
-                  rawTy <- infer st envHandle ex rhs
-                  monoTy <- zonk st rawTy
-                  generalize st env monoTy
+              if isBuiltinName name
+              then do 
+                term.output $ "Error: cannot declare reserved builtin name: " <> name
+                pure env
+              else do
+                tcResult <- try \ex ->
+                  runReader env \envHandle -> do
+                    rawTy <- infer st envHandle ex rhs
+                    monoTy <- zonk st rawTy
+                    generalize st env monoTy
 
-              case tcResult of
-                Left err -> do
-                  term.output $ "Type Error: " <> err.msg <> " at " <> T.pack (show err.span)
-                  pure env
-                Right polyTy -> do
-                  let updatedEnv = MkEnv ((name, polyTy) : env.bindings)
-                  term.output $ "[Decl] " <> name
-                  term.output $ "[Type] " <> T.pack (show polyTy)
-                  emitCodeGen (TDecl decl) (Just polyTy)
-                  pure updatedEnv
+                case tcResult of
+                  Left err -> do
+                    term.output $ "Type Error: " <> err.msg <> " at " <> T.pack (show err.span)
+                    pure env
+                  Right polyTy -> do
+                    let updatedEnv = MkEnv ((name, polyTy) : env.bindings)
+                    term.output $ "[Decl] " <> name
+                    term.output $ "[Type] " <> T.pack (show polyTy)
+                    emitCodeGen (TDecl decl) (Just polyTy)
+                    pure updatedEnv
 
             _ -> do
               term.output "Error: top-level declaration currently requires a variable binder."

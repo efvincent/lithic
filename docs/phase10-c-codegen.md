@@ -1,11 +1,23 @@
 # Phase 10 Scaffold: C Code Generation First Pass
 
-Status: C2.2 call/case/variant/select lowering merged on main (PR #28) + C4.3 fixture-level emit/compile integration landed (2026-05-23) + C3.1 compile-time prelude template embedding and C3.2 first-pass prelude safety hardening landed + expanded C4.4 compile/link/run sanity gate (2026-05-24) + C3.3 helper-contract depth landed (2026-05-25) + C3.4 record-init failure propagation and CLI long-field fixture coverage landed (2026-05-25) + C3.5 case-expression and expression-value lowering depth landed (2026-05-26)
-Branch: main (post-merge baseline)
+Status: C2.2 call/case/variant/select lowering merged on main (PR #28) + C4.3 fixture-level emit/compile integration landed (2026-05-23) + C3.1 compile-time prelude template embedding and C3.2 first-pass prelude safety hardening landed + expanded C4.4 compile/link/run sanity gate (2026-05-24) + C3.3 helper-contract depth landed (2026-05-25) + C3.4 record-init failure propagation and CLI long-field fixture coverage landed (2026-05-25) + C3.5 case-expression and expression-value lowering depth landed (2026-05-26) + C3.6 arithmetic lowering landed (2026-05-27) + C3.7 first-pass terminal IO builtin lowering landed (2026-05-27)
+Branch: mainline phase status, not branch-specific WIP tracking.
 
-Next prep checkpoint: `docs/phase10-c3-6-prep.md`.
+Next prep checkpoint: reserve builtin-name semantics and IO helper edge-case hardening.
 
-## Immediate Next Slice (C3.6 — Arithmetic Core/CGen Lowering)
+## Landed Slice (C3.7 — Terminal IO Builtins)
+
+Goal: provide the smallest end-to-end terminal IO surface through the existing
+typed and C backend pipelines without introducing a general effect system yet.
+
+Implemented behavior for this slice:
+
+1. Add shared builtin term bindings for `print : String -> String` and `readLn : String`.
+2. Lower `print` calls and `readLn` references through explicit C prelude helpers.
+3. Emit a generated C `main(void)` wrapper when a zero-argument Lithic `main` declaration is present.
+4. Keep newline behavior user-controlled: `print` does not append one; source strings may include `\n`.
+
+## Previous Slice (C3.6 — Arithmetic Core/CGen Lowering)
 
 Goal: introduce arithmetic operators in Core and CGen so direct numeric
 programs can lower without relying on placeholder/unsupported paths.

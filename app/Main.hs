@@ -26,7 +26,7 @@ import Compiler.Lexer (runLexer, LexError(..))
 import Compiler.Parser (parseTopLevel, ParseError(..))
 import Compiler.REPL (replLoop, runTerminalBrick)
 import Compiler.TUI (runTUI, TUIEvent(..))
-import Compiler.TypeChecker (Env(..), TCState(..), TypeError(..), infer, zonk)
+import Compiler.TypeChecker (TCState(..), TypeError(..), builtinEnv, isBuiltinName, infer, zonk)
 import Compiler.TypeChecker ()
 
 main :: IO ()
@@ -70,34 +70,39 @@ runEmitC srcPath outPath = do
               exitFailure
             TDecl decl ->
               case decl of 
-                DeclDef _ (PVar _ _name) rhs -> do
-                  -- Typecheck the declaration in a pure Bluefin context.
-                  let tcResult =
-                        runPureEff $ evalState (MkTCState 0 IM.empty) \st -> 
-                        try                                           \ex -> 
-                        runReader (MkEnv [])                          \env -> do
-                          rawTy <- infer st env ex rhs
-                          zonk st rawTy
-                  case tcResult of
-                    Left tcErr -> do
-                      TIO.putStrLn $ "Type error: " <> tcErr.msg
-                      exitFailure
-                    Right monoTy ->
-                      case elabTopLevel (TDecl decl) of
-                        Left elabErr -> do
-                          TIO.putStrLn $ "Elaboration error: " <> elabErr.msg
-                          exitFailure
-                        Right coreTop ->
-                          case coreTop of
-                            -- elabTopLevel on a TDecl always produces CTDecl, but
-                            -- pattern match kept explicit for exhaustivness safety.
-                            Compiler.AST.Core.CTDecl coreDecl -> do
-                              let cText = cgenProgram [(coreDecl, Just monoTy)]
-                              TIO.writeFile outPath cText
-                              TIO.putStrLn $ "C output written to " <> T.pack outPath
-                            Compiler.AST.Core.CTExpr _ -> do
-                              TIO.putStrLn "Internal error: expected CTDecl, got CTExpr."
-                              exitFailure
+                DeclDef _ (PVar _ name) rhs -> do
+                  if isBuiltinName name
+                  then do
+                    TIO.putStrLn $ "--emit-c cannot declare reserved builtin name: " <> name
+                    exitFailure
+                  else do
+                    -- Typecheck the declaration in a pure Bluefin context.
+                    let tcResult =
+                          runPureEff $ evalState (MkTCState 0 IM.empty) \st -> 
+                          try                                           \ex -> 
+                          runReader builtinEnv                          \env -> do
+                            rawTy <- infer st env ex rhs
+                            zonk st rawTy
+                    case tcResult of
+                      Left tcErr -> do
+                        TIO.putStrLn $ "Type error: " <> tcErr.msg
+                        exitFailure
+                      Right monoTy ->
+                        case elabTopLevel (TDecl decl) of
+                          Left elabErr -> do
+                            TIO.putStrLn $ "Elaboration error: " <> elabErr.msg
+                            exitFailure
+                          Right coreTop ->
+                            case coreTop of
+                              -- elabTopLevel on a TDecl always produces CTDecl, but
+                              -- pattern match kept explicit for exhaustivness safety.
+                              Compiler.AST.Core.CTDecl coreDecl -> do
+                                let cText = cgenProgram [(coreDecl, Just monoTy)]
+                                TIO.writeFile outPath cText
+                                TIO.putStrLn $ "C output written to " <> T.pack outPath
+                              Compiler.AST.Core.CTExpr _ -> do
+                                TIO.putStrLn "Internal error: expected CTDecl, got CTExpr."
+                                exitFailure
                 _ -> do
                   TIO.putStrLn "--emit-c current supports only named function declarations (f x = ...)."
                   exitFailure
