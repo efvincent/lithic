@@ -7,9 +7,13 @@
 	* Added first-pass C runtime helpers for `lithic_builtin_print` and `lithic_builtin_readln` in the embedded C prelude.
 	* Lowered Core references to `readLn` and calls to `print` through the runtime helper ABI.
 	* Added generated C `main(void)` wrapper emission when a zero-argument Lithic `main` declaration is present.
+	* Documented Phase 10 runtime ABI behavior for `readLn` EOF/allocation failure and returned string lifetime.
+	* Reserved `print` and `readLn` as builtin names for this phase and documented the reservation until builtins lower through explicit Core nodes.
+	* Hardened `readLn` CRLF handling so `\r\n` is consumed as one line terminator.
 * Test coverage:
 	* Added focused CGen unit coverage for generated C entrypoint emission, `print` lowering, and `readLn` lowering, including gcc compile checks.
 	* Added CLI `--emit-c` integration coverage for `def main = print readLn`, including generated C wrapper/helper assertions and gcc compile checks.
+	* Added regression coverage for reserved builtin declaration rejection and CRLF `readLn` behavior across consecutive reads.
 	* Updated golden-test typing setup to use the shared builtin environment.
 * Validation:
 	* Editor diagnostics: clean for touched source and test modules.

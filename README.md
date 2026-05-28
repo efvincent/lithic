@@ -33,7 +33,7 @@ Current `--emit-c` constraints:
 - Current path accepts named function declarations (`f x = ...`).
 - Emission is monomorphism-gated; unresolved polymorphism is reported as a codegen diagnostic.
 - A zero-argument Lithic declaration named `main` emits a C `main(void)` wrapper that invokes `lithic_main()`.
-- First-pass terminal IO builtins are available in typed pipelines: `print : String -> String` writes a string without adding a newline, and `readLn : String` reads one line ending at carriage return or newline.
+- First-pass terminal IO builtins are available in typed pipelines: `print : String -> String` writes a string without adding a newline, and `readLn : String` reads one line ending at carriage return or newline. These names are reserved in this phase and cannot be rebound by user code.
 
 Golden cases are discovered from `test/fixtures/*.lithic` and compared against matching snapshots in `test/golden/*.golden`.
 
@@ -56,7 +56,7 @@ In the REPL:
   ```
   Literal scrutinees are also handled directly, so `case True of True => 1` is accepted.
 - Primitive literals currently include `Int`, `Float`, `String`, and `Bool` (`True`/`False`).
-- First-pass terminal IO builtins are available: `print : String -> String` and `readLn : String`. `print` does not append a newline; include `\n` in the string when needed.
+- First-pass terminal IO builtins are available: `print : String -> String` and `readLn : String`. `print` does not append a newline; include `\n` in the string when needed. The names `print` and `readLn` are reserved until builtins become explicit Core nodes.
 - Prefix unary minus and infix subtraction are supported (`-x`, `x - y`).
 - Top-level declaration parsing (used by the file/golden pipeline) supports Phase 9F first-slice single-argument equation grouping, including pattern-headed arity-1 clauses.
 - `where` blocks on equation-style top-level declarations are supported (Phase 9G): bindings are layout-delimited and desugar to nested `let` bindings wrapping the equation body. Example:

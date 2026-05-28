@@ -235,7 +235,9 @@ Builtin term environment currently includes:
 | Name | Type | Implementation Status | Notes |
 | --- | --- | --- | --- |
 | `print` | `String -> String` | Implemented | First-pass terminal IO builtin. C lowering writes the string to stdout without appending a newline and returns the original string handle. |
-| `readLn` | `String` | Implemented | First-pass terminal IO builtin. C lowering reads one line from stdin, stopping on carriage return or newline. |
+| `readLn` | `String` | Implemented | First-pass terminal IO builtin. C lowering reads one line from stdin, stopping on carriage return or newline. At the Phase 10 C ABI boundary, EOF before any character or allocation failure returns the sentinel handle `0`; successful reads return a heap-allocated NUL-terminated string handle. Returned strings currently follow the runtime prelude's malloc-and-leak ownership model. |
+
+The names `print` and `readLn` are reserved in this phase. User code cannot bind or declare these names until builtin operations are represented explicitly during elaboration/Core lowering instead of by raw-name CGen recognition.
 
 ```text
 TopLevel ::= Decl | Expr
@@ -415,6 +417,8 @@ Current C2.1 codegen diagnostic note:
 2. When a declaration type includes unresolved polymorphism at the CGen boundary, the emitted `[C]` block includes:
        `codegen error: program is not fully monomorphic; instantiate before code generation`.
 3. A zero-argument Lithic declaration named `main` emits a generated C `main(void)` wrapper that invokes `lithic_main()`.
+4. Phase 10 terminal IO builtins use the C runtime prelude's `intptr_t` handle ABI. `print` treats handle `0` as a no-op/failure sentinel and returns `0`; `readLn` returns `0` on EOF before any character or allocation failure.
+5. `readLn` treats CRLF as one line terminator at the C runtime boundary by consuming an optional `\n` after `\r`.
 
 Contract requirements:
 1. Diagnostics carry precise `Span` whenever an originating token/node exists.

@@ -410,6 +410,13 @@ static inline intptr_t lithic_builtin_readln(void) {
     buf[len++] = (char)ch;
   }
 
+  if (ch == '\r') {
+    int next = fgetc(stdin);
+    if (next != '\n' && next != EOF) {
+      ungetc(next, stdin);
+    }
+  }
+
   if (ch == EOF && len == 0) {
     free(buf);
     return (intptr_t)0;

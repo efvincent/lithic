@@ -192,6 +192,18 @@ cliEmitCTests =
               assertBool "generated C should call readLn helper"
                 (T.isInfixOf "lithic_builtin_readln()" out)
               assertCompilesWithGcc outPath
+
+      , testCase "--emit-c rejects declarations that shadow reserved builtins" $ do
+          cliPath <- getCliPath
+          withTempLithicSource "def print = 1\n" \srcPath -> do
+            (ec, stdOut, stdErr) <- runEmitC cliPath ["--emit-c", srcPath]
+            case ec of
+              ExitSuccess ->
+                assertFailure "Expected --emit-c to reject a declaration named print"
+              ExitFailure _ -> do
+                let msg = stdOut <> stdErr
+                assertBool "failure should mention reserved builtin name"
+                  ("reserved builtin name" `elemIn` msg)
       ]
 
 runEmitC :: FilePath -> [String] -> IO (ExitCode, String, String)

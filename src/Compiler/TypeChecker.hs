@@ -52,6 +52,22 @@ builtinEnv = MkEnv
   , ("readLn", TString builtinSpan)
   ]
 
+-- | Return True for names reserved by the compiler-provided builtin environment.
+--
+-- Phase 10 reserves these names so CGen can lower builtins without ambiguity
+-- until builtins become explicit Core nodes during elaboration.
+isBuiltinName :: Text -> Bool
+isBuiltinName name = name == "print" || name == "readLn"
+
+-- | Reject attempts to bind a compiler-reserved builtin name.
+rejectBuiltinBinder
+  :: forall ex es. (ex :> es)
+  => Exception TypeError ex -> Span -> Text -> Eff es ()
+rejectBuiltinBinder ex sp name =
+  if isBuiltinName name
+  then throw ex $ MkTypeError ("Cannot bind reserved builtin name: " <> name) sp
+  else pure ()
+
 -- | Localized type errors utilizing parsed @Spans@
 data TypeError = MkTypeError
   { msg :: !Text
@@ -123,7 +139,9 @@ checkPattern
 checkPattern st ex pat expectedTy = do
   forcedTy <- force st expectedTy
   case pat of 
-    PVar _ x -> pure [(x, forcedTy)]
+    PVar sp x -> do
+      rejectBuiltinBinder ex sp x
+      pure [(x, forcedTy)]
     PWildcard _ -> pure []
     PLit sp lit -> do
       let litTy = case lit of
@@ -239,7 +257,8 @@ infer st env ex expr =
 
       -- Let-generalization is restricted to simple variable bindings
       bindings <- case pat of
-        PVar _ name -> do
+        PVar sp name -> do
+          rejectBuiltinBinder ex sp name
           e <- ask env
           polyTy <- generalize st e zonkedValTy
           pure [(name, polyTy)]
@@ -365,7 +384,7 @@ inferBinArith opName sp e1 e2 st env ex = do
     (_, NumericNonNumeric) ->
       throw ex $ MkTypeError 
         ("Right operand of " <> opName <> " must be numeric.") (getSpan e2)
-        
+
 -- | Check that an expression satisfies an expected type.
 check 
   :: forall st env ex es. (st :> es, env :> es, ex :> es) 

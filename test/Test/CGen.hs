@@ -202,6 +202,20 @@ cgenUnitTests =
             @? "readLn builtin should lower to the runtime readLn helper"
           assertCompilesWithGcc "builtin-readln" out
 
+    , testCase "readLn consumes CRLF as a single line terminator" $
+        let out = cgenProgram [(defReadLnDecl, Just (TString sp0))]
+            harness = T.unlines
+              [ "#include <stdint.h>"
+              , "#include <string.h>"
+              , "extern const char *lithic_readInput(void);"
+              , "int main(void) {"
+              , "  const char *first = lithic_readInput();"
+              , "  const char *second = lithic_readInput();"
+              , "  return (first != 0 && second != 0 && strcmp(first, \"one\") == 0 && strcmp(second, \"two\") == 0) ? 0 : 1;"
+              , "}"
+              ]
+         in assertCompilesLinksAndRunsWithGccInput "builtin-readln-crlf" out harness "one\r\ntwo\n"
+
     , testCase "declarations are emitted in input order" $
         let out = cgenProgram [(defADecl, Nothing), (defBDecl, Nothing)]
             posA = firstIndex "/* definition: a */" out
@@ -729,6 +743,12 @@ assertCompilesWithGcc tag cSrc =
 -- This provides a narrow C4.4 runtime sanity gate beyond object-only checks.
 assertCompilesLinksAndRunsWithGcc :: String -> T.Text -> T.Text -> IO ()
 assertCompilesLinksAndRunsWithGcc tag cSrc harnessSrc =
+  assertCompilesLinksAndRunsWithGccInput tag cSrc harnessSrc ""
+
+-- | Compile generated C, link with a tiny harness, and execute the binary with
+-- supplied stdin.
+assertCompilesLinksAndRunsWithGccInput :: String -> T.Text -> T.Text -> String -> IO ()
+assertCompilesLinksAndRunsWithGccInput tag cSrc harnessSrc stdinText =
   withTempArtifact tag ".c" \cPath ->
     withTempArtifact (tag <> "-harness") ".c" \harnessPath ->
       withTempArtifact tag ".out" \exePath -> do
@@ -765,7 +785,7 @@ assertCompilesLinksAndRunsWithGcc tag cSrc harnessSrc =
                 , compileErr
                 ])
 
-        (runEc, runOut, runErr) <- readProcessWithExitCode exePath [] ""
+        (runEc, runOut, runErr) <- readProcessWithExitCode exePath [] stdinText
         case runEc of
           ExitSuccess -> pure ()
           ExitFailure _ ->

@@ -1,16 +1,16 @@
 # Phase 10 Scaffold: C Code Generation First Pass
 
-Status: C2.2 call/case/variant/select lowering merged on main (PR #28) + C4.3 fixture-level emit/compile integration landed (2026-05-23) + C3.1 compile-time prelude template embedding and C3.2 first-pass prelude safety hardening landed + expanded C4.4 compile/link/run sanity gate (2026-05-24) + C3.3 helper-contract depth landed (2026-05-25) + C3.4 record-init failure propagation and CLI long-field fixture coverage landed (2026-05-25) + C3.5 case-expression and expression-value lowering depth landed (2026-05-26) + C3.6 arithmetic lowering landed (2026-05-27) + C3.7 first-pass terminal IO builtin lowering in progress (2026-05-27)
-Branch: feat/phase10-c3-7-io-main-print-readln
+Status: C2.2 call/case/variant/select lowering merged on main (PR #28) + C4.3 fixture-level emit/compile integration landed (2026-05-23) + C3.1 compile-time prelude template embedding and C3.2 first-pass prelude safety hardening landed + expanded C4.4 compile/link/run sanity gate (2026-05-24) + C3.3 helper-contract depth landed (2026-05-25) + C3.4 record-init failure propagation and CLI long-field fixture coverage landed (2026-05-25) + C3.5 case-expression and expression-value lowering depth landed (2026-05-26) + C3.6 arithmetic lowering landed (2026-05-27) + C3.7 first-pass terminal IO builtin lowering landed (2026-05-27)
+Branch: mainline phase status, not branch-specific WIP tracking.
 
-Next prep checkpoint: C3.7 terminal IO builtin validation.
+Next prep checkpoint: reserve builtin-name semantics and IO helper edge-case hardening.
 
-## Immediate Next Slice (C3.7 — Terminal IO Builtins)
+## Landed Slice (C3.7 — Terminal IO Builtins)
 
 Goal: provide the smallest end-to-end terminal IO surface through the existing
 typed and C backend pipelines without introducing a general effect system yet.
 
-Implemented direction for this slice:
+Implemented behavior for this slice:
 
 1. Add shared builtin term bindings for `print : String -> String` and `readLn : String`.
 2. Lower `print` calls and `readLn` references through explicit C prelude helpers.
