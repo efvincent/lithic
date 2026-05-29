@@ -416,7 +416,7 @@ Current C2.1 codegen diagnostic note:
 1. Declaration codegen still requires monomorphic declaration types.
 2. When a declaration type includes unresolved polymorphism at the CGen boundary, the emitted `[C]` block includes:
        `codegen error: program is not fully monomorphic; instantiate before code generation`.
-3. A zero-argument Lithic declaration named `main` emits a generated C `main(void)` wrapper that invokes `lithic_main()`.
+3. A zero-argument Lithic declaration named `main` emits a generated C `main(void)` wrapper that invokes `lithic_main()`. Non-static zero-argument declarations lower through the statement-level CGen body path, so nested forms such as `let input = readLn in print input` can be emitted as standalone executable C without an external harness.
 4. Phase 10 terminal IO builtins use the C runtime prelude's `intptr_t` handle ABI. `print` treats handle `0` as a no-op/failure sentinel and returns `0`; `readLn` returns `0` on EOF before any character or allocation failure.
 5. `readLn` treats CRLF as one line terminator at the C runtime boundary by consuming an optional `\n` after `\r`.
 

@@ -1,9 +1,27 @@
 # Phase 10 Scaffold: C Code Generation First Pass
 
-Status: C2.2 call/case/variant/select lowering merged on main (PR #28) + C4.3 fixture-level emit/compile integration landed (2026-05-23) + C3.1 compile-time prelude template embedding and C3.2 first-pass prelude safety hardening landed + expanded C4.4 compile/link/run sanity gate (2026-05-24) + C3.3 helper-contract depth landed (2026-05-25) + C3.4 record-init failure propagation and CLI long-field fixture coverage landed (2026-05-25) + C3.5 case-expression and expression-value lowering depth landed (2026-05-26) + C3.6 arithmetic lowering landed (2026-05-27) + C3.7 first-pass terminal IO builtin lowering landed (2026-05-27)
+Status: C2.2 call/case/variant/select lowering merged on main (PR #28) + C4.3 fixture-level emit/compile integration landed (2026-05-23) + C3.1 compile-time prelude template embedding and C3.2 first-pass prelude safety hardening landed + expanded C4.4 compile/link/run sanity gate (2026-05-24) + C3.3 helper-contract depth landed (2026-05-25) + C3.4 record-init failure propagation and CLI long-field fixture coverage landed (2026-05-25) + C3.5 case-expression and expression-value lowering depth landed (2026-05-26) + C3.6 arithmetic lowering landed (2026-05-27) + C3.7 first-pass terminal IO builtin lowering landed (2026-05-27) + C3.8 zero-argument main executable entrypoint landed (2026-05-29)
 Branch: mainline phase status, not branch-specific WIP tracking.
 
-Next prep checkpoint: reserve builtin-name semantics and IO helper edge-case hardening.
+Next prep checkpoint: select the next C backend depth or validation slice after C3.8 lands on main.
+
+## Landed Slice (C3.8 — Zero-Argument Main Executable Entrypoint)
+
+Goal: make a Lithic source file with a zero-argument `def main = ...` emit a
+complete C executable path without requiring an external harness.
+
+Implemented behavior for this slice:
+
+1. Non-static zero-argument declarations now lower through the statement-level
+  CGen body path, so nested forms such as `let` and `case` are handled by the
+  same machinery used for function bodies.
+2. Static non-`main` constant initializers keep the existing file-scope emission
+  path.
+3. A zero-argument Lithic `main` still emits both `lithic_main(void)` and the C
+  wrapper `int main(void)`, but `lithic_main(void)` can now contain nested
+  statement-level lowering such as `let input = readLn in print input`.
+4. CLI `--emit-c` coverage now compiles and runs a generated standalone
+  executable for the nested terminal-IO `main` shape.
 
 ## Landed Slice (C3.7 — Terminal IO Builtins)
 

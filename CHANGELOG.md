@@ -1,5 +1,17 @@
 # Revision history for lithic
 
+## 0.9.20.0 -- 2026-05-29 (Phase 10 C3.8 Zero-Argument Main Entrypoint)
+
+* Phase 10 C3.8 zero-argument main executable slice:
+	* Lowered non-static zero-argument declarations through the statement-level CGen body path instead of the narrower expression-value path.
+	* Preserved file-scope static initializer emission for non-`main` literal constants.
+	* Made `def main = let input = readLn in print input` emit a complete standalone C executable path with both `lithic_main(void)` and `int main(void)`.
+* Test coverage:
+	* Added focused CGen unit coverage for nested `let` under zero-argument `main`, including gcc compile validation and a regression assertion against the expression-value `CLet` fallback.
+	* Added CLI `--emit-c` integration coverage that emits, links, and runs the nested terminal-IO `main` shape without an external C harness.
+* Documentation:
+	* Updated README, language spec, and Phase 10 CGen notes for the current zero-argument `def main = ...` executable entrypoint convention.
+
 ## 0.9.19.0 -- 2026-05-27 (Phase 10 C3.7 Terminal IO Builtins)
 
 * Phase 10 C3.7 terminal IO builtin slice:

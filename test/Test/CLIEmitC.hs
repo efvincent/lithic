@@ -193,6 +193,34 @@ cliEmitCTests =
                 (T.isInfixOf "lithic_builtin_readln()" out)
               assertCompilesWithGcc outPath
 
+      , testCase "nested let main emits standalone executable C" $ do
+          cliPath <- getCliPath
+          let source = T.unlines
+                [ "def main ="
+                , "  let input = readLn in"
+                , "  print input"
+                ]
+          withTempLithicSource source \srcPath ->
+            withTempOutputPath \outPath -> do
+              (ec, stdOut, stdErr) <- runEmitC cliPath ["--emit-c", srcPath, "-o", outPath]
+              case ec of
+                ExitSuccess -> pure ()
+                ExitFailure _ ->
+                  assertFailure $
+                    unlines
+                      [ "Expected nested main emit-c to succeed"
+                      , "stdout: " <> stdOut
+                      , "stderr: " <> stdErr
+                      ]
+              out <- TIO.readFile outPath
+              assertBool "generated C should include lithic_main helper"
+                (T.isInfixOf "const char* lithic_main(void)" out)
+              assertBool "generated C should include C main wrapper"
+                (T.isInfixOf "int main(void)" out)
+              assertBool "nested main should not use expression-value let fallback"
+                (not (T.isInfixOf "unsupported-rhs:CLet" out))
+              assertCompilesAndRunsWithGccInput outPath "hello from lithic\n" "hello from lithic"
+
       , testCase "--emit-c rejects declarations that shadow reserved builtins" $ do
           cliPath <- getCliPath
           withTempLithicSource "def print = 1\n" \srcPath -> do
@@ -300,3 +328,45 @@ assertCompilesWithGcc cPath =
             , "stderr:"
             , stdErr
             ]
+
+assertCompilesAndRunsWithGccInput :: FilePath -> String -> String -> Assertion
+assertCompilesAndRunsWithGccInput cPath stdinText expectedStdout =
+  withTempExecutablePath \exePath -> do
+    (compileEc, compileOut, compileErr) <- readProcessWithExitCode
+      "gcc"
+      ["-std=c11", "-Wall", "-Wextra", "-Werror", cPath, "-o", exePath]
+      ""
+    case compileEc of
+      ExitSuccess -> pure ()
+      ExitFailure _ ->
+        assertFailure $
+          unlines
+            [ "Expected emitted C to compile and link as an executable"
+            , "source: " <> cPath
+            , "stdout:"
+            , compileOut
+            , "stderr:"
+            , compileErr
+            ]
+    (runEc, runOut, runErr) <- readProcessWithExitCode exePath [] stdinText
+    case runEc of
+      ExitSuccess ->
+        assertBool "standalone executable should echo stdin through print"
+          (expectedStdout `elemIn` runOut)
+      ExitFailure _ ->
+        assertFailure $
+          unlines
+            [ "Expected emitted executable to run successfully"
+            , "stdout: " <> runOut
+            , "stderr: " <> runErr
+            ]
+
+withTempExecutablePath :: (FilePath -> Assertion) -> Assertion
+withTempExecutablePath =
+  bracket create safeRemove
+  where
+    create = do
+      (path, handle) <- openTempFile "/tmp" "lithic-cli-exe-XXXXXX"
+      hClose handle
+      safeRemove path
+      pure path

@@ -135,17 +135,20 @@ cgenDecl (decl, mTy) = case decl of
           DeclConstant body ->
             let valTy = maybe "intptr_t" cgenCType mTy
                 fName = cFunctionName name
-                fBody = cgenExprValueAs valTy body
             in TB.fromText $
               if name /= "main" && isStaticCInitializer body
-              then blks [c|
-              /* definition: $name */
-              $valTy $fName = $fBody; |]
-              else blks [c|
-              /* definition: $name */
-              $valTy $fName(void) {
-                return $fBody;
-              } |]
+              then
+                let fBody = cgenExprValueAs valTy body
+                in blks [c|
+                /* definition: $name */
+                $valTy $fName = $fBody; |]
+              else
+                let fBody = cgenFunctionBodyScoped [] valTy body
+                in blks [c|
+                /* definition: $name */
+                $valTy $fName(void) {
+                  $fBody
+                } |]
 
 -- ─── Type mapping ────────────────────────────────────────────────────────────
 

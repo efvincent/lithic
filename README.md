@@ -32,8 +32,18 @@ Current `--emit-c` constraints:
 - Input must parse as a top-level declaration (bare expressions are rejected).
 - Current path accepts named function declarations (`f x = ...`).
 - Emission is monomorphism-gated; unresolved polymorphism is reported as a codegen diagnostic.
-- A zero-argument Lithic declaration named `main` emits a C `main(void)` wrapper that invokes `lithic_main()`.
+- A zero-argument Lithic declaration named `main` emits a C `main(void)` wrapper that invokes `lithic_main()`. Non-static zero-argument declarations lower through the statement-level CGen path, so nested `let`, `case`, builtin calls, arithmetic, records, and selections use the same lowering machinery as function bodies.
 - First-pass terminal IO builtins are available in typed pipelines: `print : String -> String` writes a string without adding a newline, and `readLn : String` reads one line ending at carriage return or newline. These names are reserved in this phase and cannot be rebound by user code.
+
+Current standalone executable entrypoint convention:
+
+```haskell
+def main =
+  let input = readLn in
+  print input
+```
+
+The emitted C for that shape contains both `lithic_main(void)` and `int main(void)`, so it can be compiled and run without an external C harness.
 
 Golden cases are discovered from `test/fixtures/*.lithic` and compared against matching snapshots in `test/golden/*.golden`.
 
