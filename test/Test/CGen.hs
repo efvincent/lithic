@@ -188,6 +188,21 @@ cgenUnitTests =
           T.isInfixOf "(void)lithic_main();" out
             @? "C main wrapper should invoke lithic_main"
 
+    , testCase "nested let main lowers through statement body path and compiles" $
+        let out = cgenProgram [(defMainNestedIODecl, Just (TString sp0))]
+         in do
+          T.isInfixOf "const char* lithic_main(void)" out
+            @? "nested zero-arg Lithic main should emit a callable C helper"
+          T.isInfixOf "int main(void)" out
+            @? "nested zero-arg Lithic main should trigger C main wrapper emission"
+          T.isInfixOf "intptr_t input = (intptr_t)lithic_builtin_readln();" out
+            @? "nested main let binding should lower through statement-level readLn emission"
+          T.isInfixOf "lithic_builtin_print((intptr_t)input)" out
+            @? "nested main body should lower print over the let-bound input"
+          not (T.isInfixOf "unsupported-rhs:CLet" out)
+            @? "nested main should not fall back through expression-value let diagnostics"
+          assertCompilesWithGcc "main-nested-io" out
+
     , testCase "print builtin lowers through runtime helper and compiles" $
         let out = cgenProgram [(defMainPrintDecl, Just (TString sp0))]
          in do
@@ -613,6 +628,12 @@ cgenUnitTests =
     defMainPrintDecl =
       CDeclDef sp0 "main"
         (CApp sp0 (CVar sp0 "print") (CLit sp0 (LString "hello")))
+
+    defMainNestedIODecl =
+      CDeclDef sp0 "main"
+        (CLet sp0 (CPVar sp0 "input")
+          (CVar sp0 "readLn")
+          (CApp sp0 (CVar sp0 "print") (CVar sp0 "input")))
 
     defReadLnDecl =
       CDeclDef sp0 "readInput"
